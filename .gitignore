@@ -1,3 +1,4 @@
+
 __pycache__/
 *.pyc
 .env
@@ -5,3 +6,28 @@ backend/checkam.db
 node_modules/
 dist/
 .venv/
+
+# Local Python environments
+.venv/
+venv/
+**/.venv/
+**/venv/
+
+# Local NAFDAC source data and database
+nafdac-scraper/output/
+nafdac-scraper/output2/
+data/*.sqlite3
+data/*.db
+
+# Python generated files
+__pycache__/
+*.py[cod]
+
+# Local verification scripts
+verify_db.py
+verify_registry.py
+inspect_duplicates.py
+
+# Pytest cache
+.pytest_cache/
+
