@@ -1,4 +1,4 @@
-﻿"""Compare scanned product details with local NAFDAC registry records."""
+"""Compare scanned product details with local NAFDAC registry records."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from backend.db import DEFAULT_DB_PATH, get_connection, normalize_registration_n
 NAME = "nafdac_registry"
 
 APPLIES_TO = {
-    "drug", "medicine", "cosmetic", "food", "drink", "spirits", "water",
+    "drug", "drugs", "medicine", "cosmetic", "food", "drink", "spirits", "water",
     "herbal", "herbals and nutraceuticals", "medical device",
     "medical devices", "veterinary", "vaccines and biologics",
 }
