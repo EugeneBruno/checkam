@@ -129,3 +129,71 @@ def test_manufacturer_mismatch_fails(registry_db):
     result = run(product, {"db_path": registry_db})
     assert result["result"] == "fail"
     assert "manufacturer/applicant differs" in result["detail"]
+
+
+@pytest.mark.parametrize("product", [
+    None,
+    {},
+    {"identifiers": None},
+    {"identifiers": "not-a-dictionary"},
+    {"identifiers": {"nafdac_no": None}},
+    {"identifiers": {"nafdac_no": 12345}},
+])
+def test_malformed_product_input_returns_unknown(registry_db, product):
+    result = run(product, {"db_path": registry_db})
+
+    assert result["result"] == "unknown"
+    assert result["check"] == "nafdac_registry"
+
+
+@pytest.mark.parametrize("registry_expiry", [
+    "2020-01-01",
+    "not-a-valid-date",
+    None,
+])
+def test_registry_expiry_values_do_not_crash_lookup(
+    registry_db, registry_expiry
+):
+    with get_connection(registry_db) as connection:
+        connection.execute(
+            "UPDATE registry_records SET expiry_date = ?",
+            (registry_expiry,),
+        )
+
+    result = run(make_product(), {"db_path": registry_db})
+
+    # The current check compares product details, not date validity.
+    assert result["result"] == "pass"
+
+    if registry_expiry:
+        assert "Registry record expiry date:" in result["detail"]
+
+
+def test_package_expiry_is_not_mistaken_for_registry_expiry(registry_db):
+    product = make_product(
+        identifiers={
+            "nafdac_no": "A4-100167",
+            "expiry": "2020-01-01",
+        }
+    )
+
+    result = run(product, {"db_path": registry_db})
+
+    assert result["result"] == "pass"
+    assert "Registry record expiry date: 2027-01-01" in result["detail"]
+    assert "package expiry" not in result["detail"].lower()
+
+
+@pytest.mark.parametrize("category", [
+    "Drugs",
+    "Medical devices",
+    "Vaccines and Biologics",
+    "Herbals and Nutraceuticals",
+    "Veterinary",
+])
+def test_dataset_categories_are_represented_in_registry_check(category):
+    from backend.checks.registry import APPLIES_TO
+
+    assert category.casefold() in {
+        supported.casefold() for supported in APPLIES_TO
+    }
