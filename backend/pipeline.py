@@ -38,7 +38,8 @@ def verify_product(conn, images=None, fields=None, situation="before_buying", lo
     if not product.get("category"):
         product["category"] = "other"
 
-    ctx = {"conn": conn, "country": country, "situation": situation, "location": location or {}}
+    ctx = {"conn": conn, "country": country, "situation": situation, "location": location or {},
+           "from_photo": bool(images), "typed": {k for k, v in (fields or {}).items() if v}}
 
     evidence = []
     for check in applicable(product["category"]):

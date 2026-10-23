@@ -46,6 +46,8 @@ async def verify(
                               location={"state": state, "market": market})
     except RuntimeError as exc:
         raise HTTPException(500, str(exc))
+    except Exception as exc:  # AI provider errors (bad key, quota, model name) -> readable message
+        raise HTTPException(502, f"Vision model error ({type(exc).__name__}): {str(exc)[:400]}")
 
 
 class ReportIn(BaseModel):

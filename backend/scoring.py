@@ -33,12 +33,12 @@ def score(evidence: list, ctx: dict) -> dict:
         verdict = "suspicious" if any(e["weight"] >= 30 for e in fails) else "insufficient_evidence"
     elif len(fails) >= 2 and s < 40:
         verdict = "likely_fake"
-    elif fails or s < 70:
+    elif fails:
         verdict = "suspicious"
-    elif any(e["check"] in STRONG_PASSES for e in passes):
+    elif s >= 70 and any(e["check"] in STRONG_PASSES for e in passes):
         verdict = "likely_genuine"
     else:
-        verdict = "suspicious"  # nothing strong passed: don't overclaim
+        verdict = "insufficient_evidence"  # nothing wrong found, but nothing strong confirmed either
 
     if critical or len(decided) >= 4:
         confidence = "high"
@@ -87,6 +87,6 @@ def next_step(product: dict, evidence: list, ctx: dict, verdict: str):
         return "Confirm this NAFDAC number on NAPAMS, then share a screenshot of the result"
     if not ids.get("batch") or "batch" in unreadable:
         return "Take a close photo of the batch number and expiry date"
-    if not ids.get("barcode"):
-        return "Take a photo of the barcode"
+    if not ids.get("barcode") or "barcode" in ctx.get("retake", []):
+        return "Take a close, sharp photo of the barcode (or type the digits under it)"
     return None
