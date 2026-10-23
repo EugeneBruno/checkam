@@ -1,0 +1,119 @@
+"""Check Am API.
+
+Run:  uvicorn main:app --reload --host 0.0.0.0 --port 8000   (from backend/)
+Docs: http://localhost:8000/docs
+"""
+import json
+from typing import List, Optional
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+import vision
+from db import connect
+from normalize import reg_key
+from pipeline import report_suspect, verify_product
+
+app = FastAPI(title="Check Am", version="0.1.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+conn = connect()
+
+
+@app.get("/health")
+def health():
+    n = conn.execute("SELECT COUNT(*) FROM registry_products").fetchone()[0]
+    return {"ok": True, "registry_rows": n}
+
+
+@app.post("/verify")
+async def verify(
+    files: Optional[List[UploadFile]] = File(None),
+    fields: Optional[str] = Form(None),          # JSON: {"brand": "...", "nafdac_no": "...", "batch": "...", ...}
+    situation: str = Form("before_buying"),      # before_buying | already_bought
+    state: Optional[str] = Form(None),
+    market: Optional[str] = Form(None),
+):
+    images = [await f.read() for f in (files or [])]
+    try:
+        typed = json.loads(fields) if fields else {}
+    except json.JSONDecodeError:
+        raise HTTPException(400, "fields must be JSON")
+    if not images and not typed:
+        raise HTTPException(400, "Send at least one photo or some typed details")
+    try:
+        return verify_product(conn, images=images, fields=typed, situation=situation,
+                              location={"state": state, "market": market})
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc))
+
+
+class ReportIn(BaseModel):
+    scan_id: Optional[str] = None
+    product: Optional[dict] = None
+    state: Optional[str] = None
+    market: Optional[str] = None
+    seller: Optional[str] = None
+    note: Optional[str] = None
+
+
+@app.post("/report")
+def report(body: ReportIn):
+    if not body.scan_id and not body.product:
+        raise HTTPException(400, "Send scan_id or product")
+    return report_suspect(conn, scan_id=body.scan_id, product=body.product,
+                          location={"state": body.state, "market": body.market},
+                          seller=body.seller, note=body.note, reporter="user")
+
+
+@app.post("/confirm-napams")
+async def confirm_napams(screenshot: UploadFile = File(...), expected_reg_no: Optional[str] = Form(None)):
+    """User checked NAPAMS themselves and shares the result screenshot; we read it and store it."""
+    data = vision.read_napams_screenshot(await screenshot.read())
+    if not data.get("is_napams_page"):
+        raise HTTPException(422, "That doesn't look like a NAFDAC NAPAMS result page")
+    if not data.get("found") or not data.get("reg_no"):
+        return {"ok": True, "found": False, "message": "NAPAMS shows no product for this number"}
+    if expected_reg_no and reg_key(expected_reg_no) != reg_key(data["reg_no"]):
+        raise HTTPException(422, "The screenshot is for a different NAFDAC number")
+    conn.execute(
+        "INSERT INTO registry_products (country, source, reg_no, reg_key, product_name, category, applicant, "
+        "approval_date, expiry_date, status, confirmed_at) VALUES ('NG','napams_user_confirmed',?,?,?,?,?,?,?,'active',"
+        "datetime('now')) ON CONFLICT (country, source, reg_key, product_name) DO UPDATE SET confirmed_at = datetime('now')",
+        (data["reg_no"], reg_key(data["reg_no"]), data.get("product_name"), data.get("category"),
+         data.get("holder"), data.get("approval_date"), data.get("expiry_date")),
+    )
+    conn.commit()
+    return {"ok": True, "found": True, "record": data,
+            "message": "Thanks, this NAFDAC number is now confirmed for everyone who scans it."}
+
+
+class NccResultIn(BaseModel):
+    imei: str
+    verified: bool
+    type_approved: Optional[bool] = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    device_name: Optional[str] = None
+
+
+@app.post("/ncc-result")
+def ncc_result(body: NccResultIn):
+    """User read their result off the NCC Device Checker page; store it so the next scan uses it."""
+    from checks import ncc
+    from normalize import digits
+    imei = digits(body.imei)
+    if len(imei) != 15:
+        raise HTTPException(400, "IMEI must be 15 digits")
+    ncc.save_user_result(conn, imei, int(body.verified),
+                         None if body.type_approved is None else int(body.type_approved),
+                         body.brand, body.model, body.device_name)
+    return {"ok": True, "message": "Saved. Rescan to include the NCC result."}
+
+
+@app.get("/scans/{scan_id}")
+def get_scan(scan_id: str):
+    row = conn.execute("SELECT result_json FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Scan not found")
+    return json.loads(row["result_json"])
