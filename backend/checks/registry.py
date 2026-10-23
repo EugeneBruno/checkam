@@ -1,72 +1,268 @@
-"""NAFDAC registry fit: does the printed number belong to THIS product?
 
-Sources in registry_products: 'nafdac_greenbook' (bulk snapshot) and
-'napams_user_confirmed' (screenshots users shared after checking NAPAMS).
-A number missing from our data is never treated as fake.
-"""
-from normalize import reg_key, name_similarity
+"""NAFDAC registry fit: check whether a registration number matches a product."""
+
+from __future__ import annotations
+
+import re
+from typing import Any
 
 NAME = "registry_fit"
-APPLIES_TO = {"drug", "cosmetic", "food", "drink", "spirits", "water", "herbal", "medical_device"}
-CRITICAL = True  # only when the number clearly belongs to another product
 
-NAPAMS_URL = "https://registration.nafdac.gov.ng/#verify"
-MATCH = 0.6
+APPLIES_TO = {
+    "drug", "drugs", "medicine", "cosmetic", "food", "drink",
+    "spirits", "water", "herbal", "herbals and nutraceuticals",
+    "medical_device", "medical device", "medical devices",
+    "veterinary", "vaccines and biologics",
+}
+
+CRITICAL = True
+
+NAPAMS_URL = "https://registration.nafdac.gov.ng/Home/VerifyProduct"
 
 
-def _label(row):
-    if row["source"] == "napams_user_confirmed":
-        when = (row["confirmed_at"] or "")[:10]
-        return f"NAPAMS (confirmed by a user {when})".strip()
-    return "NAFDAC Greenbook snapshot"
+def _normalise_text(value: Any) -> str:
+    """Normalize text for comparison without changing stored source data."""
+    if value is None:
+        return ""
+    return re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
 
 
-def run(product, ctx):
-    from checks import result
-    ids = product.get("identifiers") or {}
-    printed = ids.get("nafdac_no")
-    if not printed:
-        return result(NAME, "unknown", "No NAFDAC number read from the pack", weight=0)
+def _reg_key(value: Any) -> str:
+    """Normalize whitespace and case while preserving meaningful punctuation."""
+    if value is None:
+        return ""
+    return " ".join(str(value).strip().upper().split())
 
-    key = reg_key(printed)
-    rows = ctx["conn"].execute(
-        "SELECT * FROM registry_products WHERE country = ? AND reg_key = ?",
-        (ctx.get("country", "NG"), key),
-    ).fetchall()
+
+def _value(product: dict, *keys: str) -> Any:
+    """Read product fields, supporting the agreed identifiers structure."""
+    identifiers = product.get("identifiers")
+    if not isinstance(identifiers, dict):
+        identifiers = {}
+
+    for key in keys:
+        value = identifiers.get(key)
+        if value is None or not str(value).strip():
+            value = product.get(key)
+        if value is not None and str(value).strip():
+            return value
+    return None
+
+
+def _evidence(
+    result: str,
+    detail: str,
+    source: str = "NAFDAC Greenbook local snapshot",
+    weight: float = 0.0,
+) -> dict:
+    """Use the shared checks result interface."""
+    from checks import result as make_result
+
+    return make_result(
+        NAME,
+        result,
+        detail,
+        source,
+        weight=weight,
+    )
+
+
+def _contains_match(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    return left == right or left in right or right in left
+
+
+def _source_label(row: Any) -> str:
+    source = row["source"] or "nafdac_greenbook"
+    if source == "napams_user_confirmed":
+        confirmed_at = row["confirmed_at"] or ""
+        return f"NAPAMS user-confirmed record ({confirmed_at[:10]})".strip()
+    return "NAFDAC Greenbook local snapshot"
+
+
+def run(product: dict, ctx: Any = None) -> dict:
+    """Return registry evidence; a record match cannot prove physical authenticity."""
+    if not isinstance(product, dict):
+        return _evidence("unknown", "Invalid product input.")
+
+    printed_number = _value(
+        product, "nafdac_no", "NAFDAC", "nafdac_number"
+    )
+    number = _reg_key(printed_number)
+
+    if not number:
+        return _evidence(
+            "unknown",
+            "No NAFDAC registration number was supplied or read from the product.",
+        )
+
+    if not isinstance(ctx, dict) or ctx.get("conn") is None:
+        return _evidence(
+            "unknown",
+            "Registry database connection is unavailable.",
+        )
+
+    connection = ctx["conn"]
+    country = ctx.get("country", "NG")
+
+    try:
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM registry_products
+            WHERE country = ? AND reg_key = ?
+            """,
+            (country, number),
+        ).fetchall()
+    except Exception as exc:
+        return _evidence(
+            "unknown",
+            f"Local registry lookup failed ({type(exc).__name__}).",
+        )
+
     if not rows:
         ctx.setdefault("flags", []).append("confirm_on_napams")
-        return result(NAME, "unknown",
-                      f"NAFDAC number {printed} is not in our records yet. Confirm it on NAFDAC (NAPAMS).",
-                      NAPAMS_URL, weight=0)
+        return _evidence(
+            "unknown",
+            (
+                f"Registration number {printed_number} was not found in "
+                "the local Greenbook dataset. This does not establish "
+                "that the product is counterfeit. A secondary NAPAMS "
+                "verification is needed."
+            ),
+            NAPAMS_URL,
+        )
 
-    claimed = " ".join(x for x in [product.get("brand"), product.get("name"), product.get("variant")] if x)
-    best = max(rows, key=lambda r: name_similarity(claimed, r["product_name"] or ""))
-    sim = name_similarity(claimed, best["product_name"] or "")
-    src = best["detail_url"] or _label(best)
+    claimed_name = " ".join(
+        str(value).strip()
+        for value in (
+            product.get("brand"),
+            product.get("name") or product.get("product_name"),
+            product.get("variant"),
+        )
+        if value and str(value).strip()
+    )
 
-    if claimed and sim < MATCH:
+    claimed_name_normalized = _normalise_text(claimed_name)
+    claimed_strength = _normalise_text(product.get("strength"))
+    claimed_manufacturer = _normalise_text(
+        _value(product, "manufacturer", "manufacturer_name", "applicant")
+    )
+
+    def similarity_key(row: Any) -> tuple[int, int]:
+        registered_name = _normalise_text(row["product_name"])
+        exact_or_contained = (
+            bool(claimed_name_normalized)
+            and bool(registered_name)
+            and (
+                claimed_name_normalized == registered_name
+                or claimed_name_normalized in registered_name
+                or registered_name in claimed_name_normalized
+            )
+        )
+        return (int(exact_or_contained), int(bool(registered_name)))
+
+    best = max(rows, key=similarity_key)
+    source = best["detail_url"] or _source_label(best)
+
+    registered_name = _normalise_text(best["product_name"])
+    registered_manufacturer = _normalise_text(best["applicant"])
+    registered_strength = _normalise_text(best["strength"])
+
+    name_matches = (
+        not claimed_name_normalized
+        or not registered_name
+        or _contains_match(claimed_name_normalized, registered_name)
+        or _contains_match(registered_name, claimed_name_normalized)
+    )
+
+    manufacturer_matches = (
+        not claimed_manufacturer
+        or not registered_manufacturer
+        or _contains_match(claimed_manufacturer, registered_manufacturer)
+        or _contains_match(registered_manufacturer, claimed_manufacturer)
+    )
+
+    strength_matches = (
+        not claimed_strength
+        or not registered_strength
+        or claimed_strength == registered_strength
+    )
+
+    if not name_matches:
         ctx.setdefault("critical_fails", []).append(NAME)
-        return result(NAME, "fail",
-                      f"NAFDAC number {best['reg_no']} belongs to a different product: "
-                      f"\"{best['product_name']}\" ({best['applicant'] or 'unknown holder'}), "
-                      f"not \"{claimed}\". [{_label(best)}]",
-                      src, weight=60)
+        return _evidence(
+            "fail",
+            (
+                f"Registration number {best['reg_no']} is associated with "
+                f"'{best['product_name'] or 'an unnamed product'}', but the "
+                f"submitted product is '{claimed_name}'. This is a material "
+                "registry discrepancy requiring further verification; "
+                "it is not by itself proof of counterfeiting."
+            ),
+            source,
+            weight=60,
+        )
 
-    # Strength check for drugs, when both sides have it
-    strength = (product.get("strength") or "").replace(" ", "").lower()
-    reg_strength = (best["strength"] or "").replace(" ", "").lower()
-    if strength and reg_strength and strength not in reg_strength and reg_strength not in strength:
-        return result(NAME, "fail",
-                      f"Strength on pack ({product.get('strength')}) differs from registration ({best['strength']})",
-                      src, weight=40)
+    if not manufacturer_matches:
+        return _evidence(
+            "fail",
+            (
+                f"The submitted manufacturer/applicant "
+                f"('{claimed_manufacturer}') differs from the registered "
+                f"applicant ('{best['applicant']}'). Verify the relationship "
+                "with the official source."
+            ),
+            source,
+            weight=40,
+        )
 
-    status = (best["status"] or "").lower()
+    if not strength_matches:
+        return _evidence(
+            "fail",
+            (
+                f"Submitted strength ('{product.get('strength')}') differs "
+                f"from the registered strength ('{best['strength']}')."
+            ),
+            source,
+            weight=40,
+        )
+
+    status = _normalise_text(best["status"])
+
     if status and status != "active":
-        return result(NAME, "unknown",
-                      f"Registered as \"{best['product_name']}\" but registration is {status}. "
-                      "Could be old stock; be careful.", src, weight=10)
+        return _evidence(
+            "unknown",
+            (
+                f"The matching record lists status '{best['status']}'. "
+                "Confirm the current registration status with NAFDAC."
+            ),
+            source,
+            weight=10,
+        )
 
-    return result(NAME, "pass",
-                  f"NAFDAC number {best['reg_no']} matches \"{best['product_name']}\" "
-                  f"({best['applicant'] or 'holder unknown'}). [{_label(best)}]",
-                  src, weight=30)
+    if not claimed_name_normalized:
+        return _evidence(
+            "unknown",
+            (
+                f"Registration number {best['reg_no']} was found for "
+                f"'{best['product_name']}', but no submitted product name "
+                "was available to compare."
+            ),
+            source,
+            weight=10,
+        )
+
+    return _evidence(
+        "pass",
+        (
+            f"Registration number {best['reg_no']} matches the local "
+            f"record for '{best['product_name']}'. "
+            f"Registered applicant: {best['applicant'] or 'not listed'}. "
+            "This registry match does not independently prove that the "
+            "physical product or its contents are genuine."
+        ),
+        source,
+        weight=30,
+    )
