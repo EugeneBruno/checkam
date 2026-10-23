@@ -24,4 +24,10 @@ def run(product, ctx):
         return None
     if gtin_valid(code):
         return result(NAME, "pass", f"Barcode {code} has a valid check digit", weight=5)
+    if ctx.get("from_photo") and "barcode" not in ctx.get("typed", set()):
+        # Read off a photo: a single misread digit breaks the check, so don't call it fake
+        ctx.setdefault("retake", []).append("barcode")
+        return result(NAME, "unknown",
+                      f"Barcode read from the photo as {code}, but the check digit doesn't add up. "
+                      "It may be misread; photograph the barcode up close or type the digits.", weight=0)
     return result(NAME, "fail", f"Barcode {code} has an invalid check digit (likely invented or misprinted)", weight=20)

@@ -61,6 +61,29 @@ def _parse_json(text: str) -> dict:
     return json.loads(m.group(0))
 
 
+MAX_SIDE = int(os.environ.get("CHECKAM_MAX_IMAGE_SIDE", "1600"))
+TIMEOUT_S = int(os.environ.get("CHECKAM_LLM_TIMEOUT", "60"))          # Anthropic / overall cap
+GEMINI_MIN_TIMEOUT_S = 10  # Gemini rejects deadlines under 10s ("Minimum allowed deadline is 10s")
+FAST_TIMEOUT_S = max(GEMINI_MIN_TIMEOUT_S, int(os.environ.get("CHECKAM_FAST_TIMEOUT", "10")))  # per model
+LAST_TIMEOUT_S = max(GEMINI_MIN_TIMEOUT_S, int(os.environ.get("CHECKAM_LAST_TIMEOUT", "45")))  # final fallback
+
+
+def shrink(data: bytes) -> bytes:
+    """Downscale big phone photos (often 3-8 MB) to max 1600px JPEG: much faster upload, labels stay readable."""
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageOps
+        img = ImageOps.exif_transpose(Image.open(BytesIO(data)))
+        if max(img.size) <= MAX_SIDE and len(data) < 1_500_000:
+            return data
+        img.thumbnail((MAX_SIDE, MAX_SIDE))
+        out = BytesIO()
+        img.convert("RGB").save(out, "JPEG", quality=85)
+        return out.getvalue()
+    except Exception:
+        return data  # Pillow missing or unreadable image: send as-is
+
+
 def _mime(data: bytes) -> str:
     if data[:3] == b"\xff\xd8\xff":
         return "image/jpeg"
@@ -73,7 +96,7 @@ def _mime(data: bytes) -> str:
 
 def _anthropic(images, prompt=PROMPT):
     import anthropic
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(timeout=TIMEOUT_S, max_retries=1)
     content = [{"type": "image", "source": {"type": "base64", "media_type": _mime(b),
                                             "data": base64.b64encode(b).decode()}} for b in images]
     content.append({"type": "text", "text": prompt})
@@ -85,19 +108,64 @@ def _anthropic(images, prompt=PROMPT):
     return _parse_json("".join(b.text for b in msg.content if getattr(b, "type", "") == "text"))
 
 
+def _gemini_once(client, types, model, images, prompt, timeout_s):
+    parts = [types.Part.from_bytes(data=b, mime_type=_mime(b)) for b in images] + [prompt]
+    config = {"response_mime_type": "application/json",
+              "http_options": types.HttpOptions(timeout=timeout_s * 1000)}  # milliseconds
+    # Reading a label doesn't need much "thinking"; keeping it low makes Flash models much faster.
+    if os.environ.get("CHECKAM_THINKING", "off").lower() != "on":
+        config["thinking_config"] = types.ThinkingConfig(thinking_level="low")
+    try:
+        return client.models.generate_content(
+            model=model, contents=parts, config=types.GenerateContentConfig(**config))
+    except Exception as exc:
+        # If this model doesn't accept the thinking setting, retry once with its defaults
+        if "thinking_config" in config and "400" in str(exc) and "think" in str(exc).lower():
+            config.pop("thinking_config")
+            return client.models.generate_content(
+                model=model, contents=parts, config=types.GenerateContentConfig(**config))
+        raise
+
+
+def _busy(exc) -> bool:
+    text = str(exc)
+    return any(code in text for code in ("503", "UNAVAILABLE", "504", "DEADLINE_EXCEEDED", "429",
+                                          "RESOURCE_EXHAUSTED", "high demand"))
+
+
+def _timeout(exc) -> bool:
+    name = type(exc).__name__.lower()
+    return "timeout" in name or "timed out" in str(exc).lower()
+
+
 def _gemini(images, prompt=PROMPT):
+    """Try GEMINI_MODEL first; if Google says it's busy, fall back to the models in GEMINI_FALLBACKS."""
+    import time
     from google import genai
     from google.genai import types
-    model = os.environ.get("GEMINI_MODEL")
-    if not model:
-        raise RuntimeError("Set GEMINI_MODEL to the Gemini vision model you're using")
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    parts = [types.Part.from_bytes(data=b, mime_type=_mime(b)) for b in images] + [prompt]
-    resp = client.models.generate_content(
-        model=model, contents=parts,
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    model = os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash"
+    fallbacks = [m.strip() for m in os.environ.get(
+        "GEMINI_FALLBACKS", "gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite").split(",") if m.strip()]
+    models = [model] + [m for m in fallbacks if m != model]
+    client = genai.Client(
+        api_key=os.environ.get("GEMINI_API_KEY"),
+        http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1)),  # we retry ourselves
     )
-    return _parse_json(resp.text)
+    last = None
+    for i, m in enumerate(models):
+        timeout_s = LAST_TIMEOUT_S if i == len(models) - 1 else FAST_TIMEOUT_S
+        t0 = time.time()
+        try:
+            resp = _gemini_once(client, types, m, images, prompt, timeout_s)
+            note = f" (fallback for {model})" if m != model else ""
+            print(f"[vision] {m} answered in {time.time() - t0:.1f}s{note}")
+            return _parse_json(resp.text)
+        except Exception as exc:
+            last = exc
+            print(f"[vision] {m} failed after {time.time() - t0:.1f}s: {str(exc)[:100]}")
+            if not (_busy(exc) or _timeout(exc) or "404" in str(exc)):
+                raise                    # bad key, bad request: don't hide it
+    raise last
 
 
 NAPAMS_PROMPT = """This is a screenshot of a NAFDAC NAPAMS product verification result.
@@ -110,6 +178,7 @@ Copy values exactly as shown. Never guess."""
 
 def _ask(images, prompt):
     provider = os.environ.get("CHECKAM_LLM", "anthropic").lower()
+    images = [shrink(b) for b in images]
     return _gemini(images, prompt) if provider == "gemini" else _anthropic(images, prompt)
 
 

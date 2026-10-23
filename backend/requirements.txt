@@ -5,3 +5,5 @@ pydantic
 anthropic
 google-genai
 mcp
+httpx
+pillow
