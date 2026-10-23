@@ -19,3 +19,6 @@ __pycache__/
 verify_db.py
 verify_registry.py
 inspect_duplicates.py
+
+# Pytest cache
+.pytest_cache/
