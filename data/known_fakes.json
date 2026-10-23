@@ -1,0 +1,11 @@
+[
+  {"product_name": "BETACLOX (Ampicillin 250mg + Cloxacillin 250mg)", "nafdac_no": "A4-4724", "batch": "230701",
+   "note": "Falsified; printed NAFDAC number belongs to Mebendazole 500mg (expiry 07/2026 printed on fake)",
+   "source": "https://www.channelstv.com/?p=977209"},
+  {"product_name": "Postinor2 (Levonorgestrel 0.75mg)", "nafdac_no": "04-6985", "batch": "T36184B",
+   "note": "Counterfeit type 1 (mfg 08/2024, exp 08/2028); misspellings on pack",
+   "source": "https://gazettengr.com/?p=402521"},
+  {"product_name": "Postinor2 (Levonorgestrel 0.75mg)", "nafdac_no": "04-6985", "batch": "332",
+   "note": "Counterfeit type 2 (mfg 03/2023, exp 02/2027)",
+   "source": "https://gazettengr.com/?p=402521"}
+]
