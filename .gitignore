@@ -1,4 +1,12 @@
 
+__pycache__/
+*.pyc
+.env
+backend/checkam.db
+node_modules/
+dist/
+.venv/
+
 # Local Python environments
 .venv/
 venv/
@@ -22,3 +30,4 @@ inspect_duplicates.py
 
 # Pytest cache
 .pytest_cache/
+

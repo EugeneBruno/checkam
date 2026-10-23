@@ -1,17 +1,29 @@
-﻿"""Import the locally scraped NAFDAC Greenbook dataset into SQLite."""
+
+"""Load Greenbook, known-fake, SON and demo data into SQLite.
+
+Run from the repository root:
+
+    python -m backend.load_data greenbook PATH_TO_JSON
+    python -m backend.load_data fakes PATH_TO_JSON
+    python -m backend.load_data son PATH_TO_JSON
+    python -m backend.load_data seed-demo
+    python -m backend.load_data reset-demo
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from backend.db import (
     DEFAULT_DB_PATH,
-    get_connection,
+    connect,
     normalize_registration_number,
 )
 
@@ -19,84 +31,149 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_JSON_PATH = (
     PROJECT_ROOT / "nafdac-scraper" / "output2" / "nafdac_products.json"
 )
-SOURCE_NAME = "NAFDAC Greenbook (local scraped dataset)"
+SOURCE_NAME = "nafdac_greenbook"
+PLACEHOLDERS = {"", "na", "n/a", "nil", "none", "null", "-", "--"}
+
+
+def clean(value: Any) -> str | None:
+    if value is None:
+        return None
+    value = re.sub(r"\s+", " ", str(value)).strip()
+    return None if value.casefold() in PLACEHOLDERS else value
 
 
 def first_value(*values: Any) -> str | None:
-    """Return the first non-empty value as text."""
     for value in values:
-        if value is not None and str(value).strip():
-            return str(value).strip()
+        result = clean(value)
+        if result:
+            return result
     return None
 
 
-def nested_name(record: dict[str, Any], key: str) -> str | None:
-    value = record.get(key)
-    if isinstance(value, dict):
-        return first_value(value.get("name"), value.get("applicant_name"))
+def reg_key(value: Any) -> str:
+    return normalize_registration_number(value)
+
+
+def clean_name(value: Any) -> str | None:
+    value = clean(value)
+    if not value:
+        return None
+    value = re.sub(r"\s*\$+\s*$", "", value.replace('"', "")).strip()
+    return value or None
+
+
+def load_json(path: str | Path) -> Any:
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Input JSON file not found: {path}")
+    with path.open("r", encoding="utf-8-sig") as file:
+        return json.load(file)
+
+
+def _pick(record: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in record:
+            value = record[key]
+            if isinstance(value, dict):
+                value = first_value(value.get("name"), value.get("applicant_name"))
+            if value is not None and str(value).strip():
+                return value
     return None
 
 
-def map_record(record: dict[str, Any]) -> dict[str, Any]:
-    nafdac_number = first_value(record.get("NAFDAC"), record.get("nafdac_number"))
-    product_id = first_value(record.get("product_id"), record.get("id"))
+def map_greenbook_record(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Map the scraped Greenbook record to the shared registry_products schema."""
 
-    if not product_id:
-        identity = json.dumps(record, sort_keys=True, ensure_ascii=False)
-        product_id = "missing-id-" + hashlib.sha256(
-            identity.encode("utf-8")
-        ).hexdigest()[:20]
+    registration = first_value(
+        _pick(record, "NRN", "NAFDAC", "nafdac_number", "nafdac_no",
+              "registration_number", "Registration Number")
+    )
+    if not registration:
+        return None
 
-    return {
-        "product_id": product_id,
-        "nafdac_number": nafdac_number,
-        "nafdac_normalized": normalize_registration_number(nafdac_number),
-        "product_name": first_value(record.get("product_name"), record.get("name")),
-        "applicant_name": first_value(
-            record.get("applicant_name"),
-            nested_name(record, "applicant"),
+    category = first_value(
+        _pick(record, "Product Category", "category", "category_name",
+              "product_category")
+    )
+    ingredients = first_value(
+        _pick(record, "Active Ingredients", "active_ingredients",
+              "composition", "ingredient_name")
+    )
+
+    detail_id = first_value(_pick(record, "Detail ID", "detail_id", "id"))
+    detail_url = first_value(_pick(record, "detail_url", "Detail URL"))
+    if not detail_url and detail_id:
+        detail_url = (
+            "https://greenbook.nafdac.gov.ng/products/details/"
+            f"{detail_id}"
+        )
+
+    mapped = {
+        "country": "NG",
+        "source": SOURCE_NAME,
+        "reg_no": registration,
+        "reg_key": reg_key(registration),
+        "product_name": clean_name(
+            _pick(record, "Product Name", "product_name", "name")
         ),
-        "strength": first_value(record.get("strength")),
-        "composition": first_value(record.get("composition")),
-        "ingredient_name": first_value(
-            record.get("ingredient_name"),
-            nested_name(record, "ingredient"),
+        "product_type": None,
+        "active_ingredients": ingredients,
+        "category": category,
+        "dosage_form": first_value(
+            _pick(record, "Form", "dosage_form", "dosage_form_name")
         ),
-        "category_name": first_value(
-            record.get("category_name"),
-            nested_name(record, "product_category"),
+        "route": first_value(_pick(record, "ROA", "route")),
+        "strength": first_value(
+            _pick(record, "Strengths", "strength", "strengths")
         ),
-        "status": first_value(record.get("status")),
-        "approval_date": first_value(record.get("approval_date")),
-        "expiry_date": first_value(record.get("expiry_date")),
+        "applicant": first_value(
+            _pick(record, "Applicant Name", "applicant",
+                  "applicant_name", "registration_holder")
+        ),
+        "manufacturer": first_value(
+            _pick(record, "Manufacturer", "manufacturer",
+                  "manufacturer_name")
+        ),
+        "pack_size": first_value(
+            _pick(record, "Pack Size", "pack_size", "quantity")
+        ),
+        "status": first_value(_pick(record, "Status", "status")),
+        "approval_date": first_value(
+            _pick(record, "Approval Date", "approval_date")
+        ),
+        "expiry_date": first_value(
+            _pick(record, "Expiry Date", "expiry_date")
+        ),
+        "detail_url": detail_url,
     }
 
+    mapped["status"] = (
+        mapped["status"].casefold() if mapped["status"] else None
+    )
+    if category and "device" in category.casefold():
+        mapped["product_type"] = ingredients
+        mapped["active_ingredients"] = None
 
-def import_dataset(
-    json_path: Path = DEFAULT_JSON_PATH,
-    db_path: Path = DEFAULT_DB_PATH,
+    return mapped
+
+
+def load_greenbook(
+    path: str | Path = DEFAULT_JSON_PATH,
+    db_path: str | Path = DEFAULT_DB_PATH,
 ) -> dict[str, int]:
-    if not json_path.is_file():
-        raise FileNotFoundError(f"Dataset not found: {json_path}")
-
-    with json_path.open("r", encoding="utf-8-sig") as file:
-        records = json.load(file)
-
+    records = load_json(path)
     if not isinstance(records, list):
-        raise ValueError("Expected the JSON dataset to contain a list of records.")
+        raise ValueError("Expected Greenbook JSON to contain a list of records.")
 
     started_at = datetime.now(timezone.utc).isoformat()
-    retrieved_at = started_at
-    counts = {"seen": len(records), "imported": 0, "versions_added": 0, "errors": 0}
+    counts = {"seen": len(records), "imported": 0, "skipped": 0,
+              "versions_added": 0, "errors": 0}
 
-    connection = get_connection(db_path)
-
+    connection = connect(db_path)
     try:
         cursor = connection.execute(
-            """
-            INSERT INTO import_runs (source, started_at, records_seen)
-            VALUES (?, ?, ?)
-            """,
+            """INSERT INTO import_runs (source, started_at, records_seen)
+               VALUES (?, ?, ?)""",
             (SOURCE_NAME, started_at, len(records)),
         )
         run_id = cursor.lastrowid
@@ -107,85 +184,97 @@ def import_dataset(
                 continue
 
             try:
-                mapped = map_record(record)
+                mapped = map_greenbook_record(record)
+                if mapped is None:
+                    counts["skipped"] += 1
+                    continue
+
                 raw_json = json.dumps(
-                    record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                    record, ensure_ascii=False, sort_keys=True
                 )
-                content_hash = hashlib.sha256(raw_json.encode("utf-8")).hexdigest()
+                content_hash = hashlib.sha256(
+                    raw_json.encode("utf-8")
+                ).hexdigest()
+                retrieved_at = datetime.now(timezone.utc).isoformat()
 
                 existing = connection.execute(
-                    "SELECT content_hash FROM registry_records WHERE product_id = ?",
-                    (mapped["product_id"],),
+                    """SELECT id, content_hash
+                       FROM registry_products
+                       WHERE country = ? AND source = ? AND reg_key = ?
+                         AND product_name IS ?""",
+                    (
+                        mapped["country"],
+                        mapped["source"],
+                        mapped["reg_key"],
+                        mapped["product_name"],
+                    ),
                 ).fetchone()
 
-                if existing is None or existing["content_hash"] != content_hash:
-                    connection.execute(
-                        """
-                        INSERT OR IGNORE INTO registry_source_versions
-                            (product_id, content_hash, source, retrieved_at, raw_json)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (
-                            mapped["product_id"],
-                            content_hash,
-                            SOURCE_NAME,
-                            retrieved_at,
-                            raw_json,
-                        ),
-                    )
-                    if connection.execute("SELECT changes()").fetchone()[0]:
-                        counts["versions_added"] += 1
+                values = {
+                    **mapped,
+                    "raw_json": raw_json,
+                    "source_retrieved_at": retrieved_at,
+                    "content_hash": content_hash,
+                }
 
+                if existing is not None and existing["content_hash"] == content_hash:
+                    # Identical source record: no duplicate insert required.
+                    continue
+
+                connection.execute(
+                    """
+                    INSERT INTO registry_source_versions (
+                        country, source, reg_key, product_name,
+                        content_hash, retrieved_at, raw_json
+                    ) VALUES (
+                        :country, :source, :reg_key, :product_name,
+                        :content_hash, :source_retrieved_at, :raw_json
+                    )
+                    ON CONFLICT(
+                        country, source, reg_key, product_name, content_hash
+                    ) DO NOTHING
+                    """,
+                    values,
+                )
+                if connection.execute("SELECT changes()").fetchone()[0]:
+                    counts["versions_added"] += 1
+
+                if existing is None:
+                    columns = list(values.keys())
                     connection.execute(
-                        """
-                        INSERT INTO registry_records (
-                            product_id, nafdac_number, nafdac_normalized,
-                            product_name, applicant_name, strength, composition,
-                            ingredient_name, category_name, status, approval_date,
-                            expiry_date, source, source_retrieved_at, raw_json,
-                            content_hash
+                        f"""
+                        INSERT INTO registry_products (
+                            {", ".join(columns)}
                         ) VALUES (
-                            :product_id, :nafdac_number, :nafdac_normalized,
-                            :product_name, :applicant_name, :strength, :composition,
-                            :ingredient_name, :category_name, :status, :approval_date,
-                            :expiry_date, :source, :source_retrieved_at, :raw_json,
-                            :content_hash
+                            {", ".join(":" + column for column in columns)}
                         )
-                        ON CONFLICT(product_id) DO UPDATE SET
-                            nafdac_number = excluded.nafdac_number,
-                            nafdac_normalized = excluded.nafdac_normalized,
-                            product_name = excluded.product_name,
-                            applicant_name = excluded.applicant_name,
-                            strength = excluded.strength,
-                            composition = excluded.composition,
-                            ingredient_name = excluded.ingredient_name,
-                            category_name = excluded.category_name,
-                            status = excluded.status,
-                            approval_date = excluded.approval_date,
-                            expiry_date = excluded.expiry_date,
-                            source = excluded.source,
-                            source_retrieved_at = excluded.source_retrieved_at,
-                            raw_json = excluded.raw_json,
-                            content_hash = excluded.content_hash
                         """,
-                        {
-                            **mapped,
-                            "source": SOURCE_NAME,
-                            "source_retrieved_at": retrieved_at,
-                            "raw_json": raw_json,
-                            "content_hash": content_hash,
-                        },
+                        values,
                     )
-                    counts["imported"] += 1
+                else:
+                    # Update the matching source record; preserve its row ID.
+                    update_columns = [
+                        column for column in values
+                        if column not in {
+                            "country", "source", "reg_key", "product_name"
+                        }
+                    ]
+                    connection.execute(
+                        f"""
+                        UPDATE registry_products
+                        SET {", ".join(f"{c} = :{c}" for c in update_columns)}
+                        WHERE id = :existing_id
+                        """,
+                        {**values, "existing_id": existing["id"]},
+                    )
 
-            except (sqlite3.Error, TypeError, ValueError) as error:
-                counts["errors"] += 1
-                print(f"Skipped record: {error}")
+                counts["imported"] += 1
 
         connection.execute(
             """
             UPDATE import_runs
-            SET finished_at = ?, records_imported = ?, versions_added = ?, errors = ?
+            SET finished_at = ?, records_imported = ?,
+                versions_added = ?, errors = ?
             WHERE id = ?
             """,
             (
@@ -197,22 +286,148 @@ def import_dataset(
             ),
         )
         connection.commit()
-
     except Exception:
         connection.rollback()
         raise
     finally:
         connection.close()
 
+    print(
+        f"Greenbook: seen={counts['seen']}, "
+        f"imported/updated={counts['imported']}, "
+        f"skipped={counts['skipped']}, "
+        f"versions_added={counts['versions_added']}, "
+        f"errors={counts['errors']}"
+    )
     return counts
 
 
+def load_fakes(
+    path: str | Path,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> None:
+    records = load_json(path)
+    if not isinstance(records, list):
+        raise ValueError("Expected known-fakes JSON to contain a list.")
+
+    connection = connect(db_path)
+    try:
+        for item in records:
+            connection.execute(
+                """INSERT INTO known_fakes
+                   (product_name, reg_key, batch, note, source)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    clean(item.get("product_name")),
+                    reg_key(item.get("nafdac_no")),
+                    clean(item.get("batch")),
+                    clean(item.get("note")),
+                    clean(item.get("source")),
+                ),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+    print(f"Known fakes loaded: {len(records)}")
+
+
+def load_son(
+    path: str | Path,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> None:
+    records = load_json(path)
+    if not isinstance(records, list):
+        raise ValueError("Expected SON JSON to contain a list.")
+
+    connection = connect(db_path)
+    try:
+        connection.execute("DELETE FROM son_certified")
+        connection.executemany(
+            """INSERT INTO son_certified
+               (sector, company, address, product, state, search)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    clean(item.get("sector")),
+                    clean(item.get("company")),
+                    clean(item.get("address")),
+                    clean(item.get("product")),
+                    clean(item.get("state")),
+                    f"{item.get('company', '')} {item.get('product', '')}".casefold(),
+                )
+                for item in records
+            ],
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    print(f"SON certified products loaded: {len(records)}")
+
+
+DEMO_SCANS = [
+    ("demo_1", "medical_device", "Accu-Chek",
+     "Accu-Chek Softclix Lancet", "03-6090", "DEMO-SC2207",
+     "2027-06", "Lagos"),
+    ("demo_2", "medical_device", "Accu-Chek",
+     "Accu-Chek Softclix Lancet", "03-6090", "DEMO-SC2207",
+     "2027-06", "Ogun"),
+    ("demo_3", "medical_device", "Always",
+     "Always 3-In-1 Maxi Thick Sanitary Pads", "03-2099",
+     "DEMO-AL5531", "2027-03", "Kano"),
+]
+
+
+def seed_demo(db_path: str | Path = DEFAULT_DB_PATH) -> None:
+    connection = connect(db_path)
+    try:
+        for sid, category, brand, name, reg, batch, expiry, state in DEMO_SCANS:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO scans (
+                    id, category, brand, product_name, reg_key, batch,
+                    expiry, state, verdict, trust_score, seeded, result_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', 50, 1, '{}')
+                """,
+                (sid, category, brand, name, reg_key(reg), batch, expiry, state),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+    print(f"Demo scans seeded: {len(DEMO_SCANS)}")
+
+
+def reset_demo(db_path: str | Path = DEFAULT_DB_PATH) -> None:
+    connection = connect(db_path)
+    try:
+        connection.execute("DELETE FROM scans WHERE seeded = 1 OR id LIKE 'demo_%'")
+        connection.execute("DELETE FROM reports WHERE seeded = 1")
+        connection.commit()
+    finally:
+        connection.close()
+    print("Demo scans and reports removed.")
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__)
+        return
+
+    command = args[0]
+    if command == "greenbook":
+        load_greenbook(args[1] if len(args) > 1 else DEFAULT_JSON_PATH)
+    elif command == "fakes" and len(args) > 1:
+        load_fakes(args[1])
+    elif command == "son" and len(args) > 1:
+        load_son(args[1])
+    elif command == "seed-demo":
+        seed_demo()
+    elif command == "reset-demo":
+        reset_demo()
+    else:
+        print(__doc__)
+        raise SystemExit(2)
+
+
 if __name__ == "__main__":
-    print(f"Dataset: {DEFAULT_JSON_PATH}")
-    print(f"Database: {DEFAULT_DB_PATH}")
-    result = import_dataset()
-    print("\nImport complete")
-    print(f"Records seen:     {result['seen']}")
-    print(f"Records imported: {result['imported']}")
-    print(f"Versions added:   {result['versions_added']}")
-    print(f"Errors:           {result['errors']}")
+    main()
