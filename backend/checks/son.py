@@ -111,8 +111,11 @@ def run(product, ctx):
             detail += " Confirm the authentication mark by SMS to 281 or by scanning its QR."
         return result(NAME, "unknown", detail, LIST_SOURCE, weight=0)
 
-    return result(NAME, "fail",
+    # Imports (most branded electronics and chargers) are certified under SONCAP, which isn't printed on the
+    # product or published as a list, so a missing local MANCAP mark is not evidence against the product.
+    return result(NAME, "unknown",
                   "No SON mark (MANCAP, NIS or PAM) seen, and the product isn't on SON's list of locally made "
-                  "certified products. Locally made goods like this should carry MANCAP; if it's imported, ask the "
-                  "seller for its SONCAP certificate. Photograph the label if the mark is elsewhere.",
-                  SON_FAQ, weight=10)
+                  "certified products. That's normal for imported goods, which are certified under SONCAP instead: "
+                  "ask the seller for its SONCAP certificate. If it was made in Nigeria, it should carry MANCAP, so "
+                  "photograph the label if the mark is elsewhere.",
+                  SON_FAQ, weight=0)
