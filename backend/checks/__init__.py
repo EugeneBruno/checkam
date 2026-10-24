@@ -13,9 +13,9 @@ Categories used across the app:
     phone, electronics, electrical, auto_part, building_material,
     fashion, other
 """
-from . import barcode, dates, registry, clones, reports, alerts, son, imei, ncc, packaging
+from . import barcode, dates, registry, clones, reports, alerts, son, imei, ncc, packaging, reference
 
-ALL_CHECKS = [registry, alerts, clones, reports, barcode, dates, son, imei, ncc, packaging]
+ALL_CHECKS = [registry, alerts, clones, reports, barcode, dates, son, imei, ncc, packaging, reference]
 
 NAFDAC_CATEGORIES = {"drug", "cosmetic", "food", "drink", "spirits", "water", "herbal", "medical_device"}
 SON_CATEGORIES = {"electrical", "electronics", "auto_part", "building_material"}

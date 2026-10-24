@@ -150,7 +150,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     db_path = Path(path) if path is not None else DEFAULT_DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    connection = sqlite3.connect(str(db_path), timeout=30)
+    connection = sqlite3.connect(str(db_path), timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 30000")
