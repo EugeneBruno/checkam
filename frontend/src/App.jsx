@@ -249,6 +249,7 @@ export default function App() {
   }, []);
 
   function navigateToChecking(nextIntakeWithFiles) {
+    window.scrollTo(0, 0);
     const id = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const { files, ...nextIntake } = nextIntakeWithFiles;
     setPendingFiles(id, files);
@@ -270,6 +271,7 @@ export default function App() {
   }
 
   function navigateToResult(completedRun) {
+    window.scrollTo(0, 0);
     const completedResult = {
       ...completedRun,
       completedAt: new Date().toISOString(),
@@ -292,6 +294,7 @@ export default function App() {
   }
 
   function navigateToIntake(prefill = null) {
+    window.scrollTo(0, 0);
     showPageLoader("New check");
     window.history.pushState({ screen: "intake" }, "", "/scan");
     setNavigation({ page: "intake", result: null, intake: null, scanId: null, prefill });

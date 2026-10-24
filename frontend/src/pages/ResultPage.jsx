@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import checkAmLogo from '../public/Check_Am_Logo-removebg-preview.png'
 import { NAPAMS_URL, confirmNapams, report, researchScan } from '../api.js'
 import { toCheck } from './CheckingPage.jsx'
@@ -367,6 +367,8 @@ function PhotosCard({ photos, response }) {
 }
 
 function ResultPage({ result, onBack, onScanAgain }) {
+  // open at the verdict, not wherever the checking page was scrolled to
+  useEffect(() => { window.scrollTo(0, 0) }, [])
   const { intake, scanId, completedAt } = result
   const [response, setResponse] = useState(result.response || null)
   const purchaseStage = intake?.situation?.intent || 'BEFORE_BUYING'
@@ -379,7 +381,7 @@ function ResultPage({ result, onBack, onScanAgain }) {
           <img
             src={checkAmLogo}
             alt="CheckAm"
-            className="h-8 w-32 rounded bg-white object-contain p-1"
+            className="absolute left-0 -top-7 h-auto w-40 max-w-none"
           />
         </a>
         <div className="topbar-status"><span className="status-dot" /> Result</div>
