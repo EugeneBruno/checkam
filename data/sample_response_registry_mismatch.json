@@ -1,0 +1,62 @@
+{
+  "scan_id": "scn_106c049366",
+  "situation": "before_buying",
+  "verdict": "likely_fake",
+  "trust_score": 0,
+  "confidence": "high",
+  "recommendation": "do_not_buy",
+  "product": {
+    "category": "cosmetic",
+    "category_confidence": null,
+    "brand": "Glow",
+    "name": "Shea Butter Cream",
+    "variant": null,
+    "strength": null,
+    "identifiers": {
+      "nafdac_no": "A3-100882",
+      "batch": "X1",
+      "expiry": "2027-01"
+    }
+  },
+  "contents": {},
+  "evidence": [
+    {
+      "check": "registry_fit",
+      "result": "fail",
+      "detail": "NAFDAC number A3-100882 belongs to a different product: \"Adre Baby Wipes\" (Vitalgrub Nigeria Limited), not \"Glow Shea Butter Cream\". [NAFDAC Greenbook snapshot]",
+      "source": "NAFDAC Greenbook snapshot",
+      "weight": 60
+    },
+    {
+      "check": "nafdac_alerts",
+      "result": "pass",
+      "detail": "No NAFDAC alert matches this batch",
+      "source": "NAFDAC public alerts",
+      "weight": 5
+    },
+    {
+      "check": "clone_detection",
+      "result": "unknown",
+      "detail": "First time we've seen batch X1",
+      "source": "Check Am scan history",
+      "weight": 0
+    },
+    {
+      "check": "date_sanity",
+      "result": "pass",
+      "detail": "Dates look valid (expiry 2027-01)",
+      "source": null,
+      "weight": 5
+    }
+  ],
+  "not_checked": [
+    "clone_detection",
+    "photo_analysis"
+  ],
+  "next_step": "Don't use it. Tap Report so other buyers are warned.",
+  "prior_reports": 0,
+  "links": [],
+  "actions": [
+    "report"
+  ]
+}

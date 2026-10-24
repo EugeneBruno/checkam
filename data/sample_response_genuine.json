@@ -1,0 +1,67 @@
+{
+  "scan_id": "scn_932c1c1576",
+  "situation": "before_buying",
+  "verdict": "likely_genuine",
+  "trust_score": 100,
+  "confidence": "high",
+  "recommendation": "buy",
+  "product": {
+    "category": "medical_device",
+    "category_confidence": null,
+    "brand": "Accu-Chek",
+    "name": "Softclix Lancet",
+    "variant": null,
+    "strength": null,
+    "identifiers": {
+      "nafdac_no": "NAFDAC REG NO: 03 6090",
+      "batch": "DEMO-SC2207",
+      "expiry": "06/2027",
+      "barcode": "4015630982325"
+    }
+  },
+  "contents": {},
+  "evidence": [
+    {
+      "check": "registry_fit",
+      "result": "pass",
+      "detail": "NAFDAC number 03-6090 matches \"Accu-Chek Softclix Lancet\" (Roche Products Limited). [NAFDAC Greenbook snapshot]",
+      "source": "NAFDAC Greenbook snapshot",
+      "weight": 30
+    },
+    {
+      "check": "nafdac_alerts",
+      "result": "pass",
+      "detail": "No NAFDAC alert matches this batch",
+      "source": "NAFDAC public alerts",
+      "weight": 5
+    },
+    {
+      "check": "clone_detection",
+      "result": "pass",
+      "detail": "Batch DEMOSC2207 seen in 2 earlier scan(s), all consistent",
+      "source": "Check Am scan history",
+      "weight": 10
+    },
+    {
+      "check": "barcode_check_digit",
+      "result": "pass",
+      "detail": "Barcode 4015630982325 has a valid check digit",
+      "source": null,
+      "weight": 5
+    },
+    {
+      "check": "date_sanity",
+      "result": "pass",
+      "detail": "Dates look valid (expiry 2027-06)",
+      "source": null,
+      "weight": 5
+    }
+  ],
+  "not_checked": [
+    "photo_analysis"
+  ],
+  "next_step": null,
+  "prior_reports": 0,
+  "links": [],
+  "actions": []
+}
