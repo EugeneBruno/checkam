@@ -11,7 +11,7 @@ import {
   Play,
   Scan,
   SpellCheck as IconTextSpellcheck,
-  TextCursorInput as IconCursorText,
+  Smartphone as IconPhone,
   Video as IconVideo,
   Bot,
   Terminal,
@@ -19,11 +19,12 @@ import {
   ChevronRight,
   CheckCircle2,
 } from "lucide-react";
-import checkAmLogo from "../public/Check_Am_Logo-removebg-preview.png";
-import scanImage from "../public/pexels-kampus-8476600.jpg";
+import checkAmLogo from "./public/Check_Am_Logo-removebg-preview.png";
+import scanImage from "./public/pexels-kampus-8476600.jpg";
+
 
 const checkAm = "Checkam";
-const navLinks = ["How it works", "What we check", "For AI assistants"];
+const navLinks = ["How it works", "What we check", "For AI assistants", "Sign In",];
 const sources = [
   "NAFDAC public records",
   "SON on-pack marks",
@@ -45,7 +46,7 @@ const methods = [
     label: "Record video",
   },
   {
-    icon: IconCursorText,
+    icon: IconPhone,
     title: "No camera? Type it in.",
     body: "Enter a product name, barcode, NAFDAC number, serial or QR details. Add only what you have.",
     label: "Type details",
@@ -103,7 +104,7 @@ export default function App() {
           <span className="relative h-9 w-36 overflow-hidden" aria-hidden="true">
             <img
               src={checkAmLogo}
-              alt=""
+              alt="CheckAm Logo"
               className="absolute left-0 -top-7 h-auto w-40 max-w-none"
             />
           </span>
@@ -113,7 +114,11 @@ export default function App() {
           {navLinks.map((link) => (
             <a
               key={link}
-              href={`#${link.toLowerCase().replace(/\s+/g, "-")}`}
+              href={
+                link === "Sign In"
+                  ? "/login"
+                  : `#${link.toLowerCase().replace(/\s+/g, "-")}`
+              }
               className="hidden text-sm font-medium text-[#203C32] hover:text-[#18543F] transition-colors lg:block"
             >
               {link}
@@ -121,9 +126,9 @@ export default function App() {
           ))}
           <a
             href="/scan"
-            className="flex h-13 items-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 text-[15px] text-white hover:bg-[#123E30] transition-colors"
+            className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 text-center text-[15px] text-white hover:bg-[#123E30] transition-colors"
           >
-            <ArrowUpRight size={19} stroke={1.7} />
+            <ArrowUpRight size={19} stroke={1.7} className="shrink-0" />
             Start a check
           </a>
         </nav>
@@ -146,16 +151,16 @@ export default function App() {
             <div className="flex flex-wrap gap-3">
               <a
                 href="/scan"
-                className="flex h-13 items-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 text-[15px] text-white hover:bg-[#123E30] transition-colors"
+                className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 text-center text-[15px] text-white hover:bg-[#123E30] transition-colors"
               >
-                <Scan size={19} stroke={1.7} />
+                <Scan size={19} stroke={1.7} className="shrink-0" />
                 Start a check
               </a>
               <a
                 href="#how-it-works"
-                className="flex h-13 items-center gap-3 rounded-lg border border-[#DCE2D8] bg-white px-5 text-[15px] text-[#18543F] hover:bg-slate-50 transition-colors"
+                className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#DCE2D8] bg-white px-5 text-center text-[15px] text-[#18543F] hover:bg-slate-50 transition-colors"
               >
-                <Play size={19} stroke={1.7} />
+                <Play size={19} stroke={1.7} className="shrink-0" />
                 See how it works
               </a>
             </div>
@@ -238,10 +243,8 @@ export default function App() {
                 className="flex flex-col justify-between rounded-2xl border border-[#DCE2D8] bg-white p-7 shadow-sm hover:shadow-md transition-shadow"
               >
                 <div>
-                  <div className="w-12 h-12 rounded-xl bg-[#E8F0E8] text-[#18543F] flex items-center justify-center mb-6">
-                    <Icon size={24} stroke={1.8} />
-                  </div>
-                  <h3 className="text-xl font-semibold text-[#123E30] mb-2.5">
+                  <h3 className="flex items-center gap-3 text-xl font-semibold text-[#123E30] mb-2.5">
+                    <Icon size={24} strokeWidth={1.8} className="shrink-0 text-[#18543F]" />
                     {method.title}
                   </h3>
                   <p className="text-sm text-[#4E6258] leading-relaxed mb-6">
@@ -250,7 +253,7 @@ export default function App() {
                 </div>
                 <a
                   href="/scan"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#18543F] hover:text-[#123E30] transition-colors"
+                  className="inline-flex items-center justify-center gap-2 text-center text-sm font-semibold text-[#18543F] hover:text-[#123E30] transition-colors"
                 >
                   <span>{method.label}</span>
                   <ChevronRight size={16} />
@@ -261,12 +264,15 @@ export default function App() {
         </div>
 
         {/* What We Check Grid */}
-        <div id="what-we-check">
+        <div
+          id="what-we-check"
+          className="rounded-3xl bg-[#18543F] p-6 md:p-8"
+        >
           <div className="max-w-xl mb-10">
-            <h3 className="text-2xl font-semibold text-[#123E30] mb-2">
+            <h3 className="text-2xl font-semibold text-[#FFFDEF] mb-2">
               Six automatic verification checks
             </h3>
-            <p className="text-sm text-[#4E6258]">
+            <p className="text-sm text-[#FFFDEF]">
               The same checks run for every product to keep results consistent and explainable.
             </p>
           </div>
@@ -277,15 +283,18 @@ export default function App() {
               return (
                 <div
                   key={idx}
-                  className="rounded-2xl border border-[#DCE2D8] bg-white/70 p-6 flex flex-col gap-3"
+                  className="rounded-2xl border border-white/20 bg-[#18543F] p-6 flex flex-col gap-3"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-[#F7F7F0] border border-[#DCE2D8] text-[#18543F] flex items-center justify-center">
-                    <Icon size={20} stroke={1.8} />
-                  </div>
-                  <h4 className="text-base font-semibold text-[#123E30]">
+                  <Icon
+                    size={20}
+                    strokeWidth={1.5}
+                    className="text-[#BCD0C1]"
+                    aria-hidden="true"
+                  />
+                  <h4 className="text-base font-semibold text-white">
                     {chk.title}
                   </h4>
-                  <p className="text-xs md:text-sm text-[#4E6258] leading-relaxed">
+                  <p className="text-xs md:text-sm text-white/85 leading-relaxed">
                     {chk.body}
                   </p>
                 </div>
@@ -314,7 +323,7 @@ export default function App() {
             <div className="inline-flex rounded-xl border border-[#DCE2D8] bg-white p-1 gap-1">
               <button
                 onClick={() => setActiveTab("before")}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`inline-flex items-center justify-center text-center px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
                   activeTab === "before"
                     ? "bg-[#18543F] text-white shadow-sm"
                     : "text-[#4E6258] hover:text-[#123E30]"
@@ -324,7 +333,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => setActiveTab("already")}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`inline-flex items-center justify-center text-center px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
                   activeTab === "already"
                     ? "bg-[#18543F] text-white shadow-sm"
                     : "text-[#4E6258] hover:text-[#123E30]"
@@ -371,7 +380,7 @@ export default function App() {
               <div className="flex items-center justify-between border-b border-[#254A3B] pb-4 mb-5">
                 <div className="flex items-center gap-2 text-xs text-[#8BE4C1]">
                   <Terminal size={15} />
-                  <span>ResearchAgent: autonomous_pipeline.py</span>
+                  <span>Product research in progress</span>
                 </div>
                 <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
@@ -499,7 +508,7 @@ export default function App() {
       </section>
 
       {/* ─── SECTION 4: TRUST, LIMITS & DEMO PRESETS ─── */}
-      <section className="px-5 py-16 md:px-10 lg:px-20 lg:py-24">
+      <section className="px-5 pb-0 pt-16 md:px-10 lg:px-20 lg:pb-0 lg:pt-24">
         <div className="max-w-2xl mb-12">
           <p className="font-['IBM_Plex_Mono',monospace] text-xs font-semibold uppercase tracking-wider text-[#18543F] mb-3">
             Radical Candor
@@ -534,46 +543,84 @@ export default function App() {
           </div>
         </div>
 
-        {/* Hackathon Demo Presets Launcher */}
-        <div className="rounded-3xl border border-[#18543F]/20 bg-[#E8F0E8] p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#18543F] uppercase tracking-wide">
-              <Sparkles size={16} />
-              Evaluating the Platform?
-            </div>
-            <h3 className="text-2xl font-bold text-[#123E30]">
-              Test our six preset demo scenarios.
+        {/* Closing call to action */}
+        <div className="-mx-5 mt-16 flex flex-col items-start justify-between gap-6 bg-[#E8F0E8] px-5 py-10 sm:flex-row sm:items-center md:-mx-10 md:px-10 lg:-mx-20 lg:px-20">
+          <div>
+            <p className="mb-2 font-['IBM_Plex_Mono',monospace] text-[10px] font-medium uppercase tracking-wide text-[#18543F]">
+              A small check, a more informed choice.
+            </p>
+            <h3 className="text-2xl font-semibold text-[#123E30]">
+              What’s in your hands?
             </h3>
-            <p className="text-sm text-[#4E6258] max-w-xl">
-              Explore sample scenarios covering registration mismatches, suspicious batch details, and product research without entering data manually.
+            <p className="mt-2 text-sm text-[#64746B]">
+              Start with a photo. We’ll help you understand the evidence.
             </p>
           </div>
-          <a
-            href="/scan"
-            className="shrink-0 flex items-center gap-2.5 px-6 py-4 rounded-xl bg-[#18543F] hover:bg-[#123E30] text-white text-sm font-semibold transition-colors shadow-md"
-          >
-            <span>Launch Demo Scanner</span>
-            <ArrowUpRight size={18} />
-          </a>
+          <div className="shrink-0">
+            <a
+              href="/scan"
+              className="flex h-12 items-center justify-center gap-2 rounded-lg bg-[#18543F] px-6 text-center text-sm font-semibold text-white transition-colors hover:bg-[#123E30]"
+            >
+              <Scan size={16} className="shrink-0" />
+              Start a check
+            </a>
+            <p className="mt-2 text-[10px] text-[#64746B]">
+              Free to use. No sign-up required.
+            </p>
+          </div>
         </div>
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="border-t border-[#DCE2D8] bg-[#F7F7F0] px-5 py-12 md:px-10 lg:px-20 text-xs text-[#64746B] space-y-6">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-[#123E30] text-sm">Checkam</span>
-            <span>— The AI-native product veracity protocol.</span>
+      <footer className="bg-[#123E30] px-5 py-10 text-xs text-[#BCD0C1] md:px-10 lg:px-20">
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-5 md:gap-10">
+          <div className="col-span-2 space-y-4 md:col-span-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[#F7F7F0]">
+                <img
+                  src={checkAmLogo}
+                  alt="CheckAm"
+                  className="h-full w-full object-contain"
+                />
+              </span>
+              <span className="text-sm font-semibold text-white">Checkam</span>
+            </div>
+            <p className="max-w-sm leading-relaxed">
+              Evidence-based product checking for people in Nigeria and their AI assistants.
+            </p>
+            <p className="max-w-sm text-[10px] leading-relaxed text-[#8DA99A]">
+              Checkam is a provisional product name and a Team 9ynx concept for TC Hackathon 3.0.
+            </p>
           </div>
-          <div className="flex gap-6">
-            <a href="/scan" className="hover:text-[#18543F]">Scanner</a>
-            <a href="#how-it-works" className="hover:text-[#18543F]">Verification Specs</a>
-            <a href="#for-ai-assistants" className="hover:text-[#18543F]">AI assistant tools</a>
-          </div>
+
+          <nav aria-label="Explore" className="space-y-3">
+            <h3 className="font-semibold text-white">Explore</h3>
+            <a href="/scan" className="block hover:text-white">Start a check</a>
+            <a href="#how-it-works" className="block hover:text-white">How it works</a>
+            <a href="#what-we-check" className="block hover:text-white">What we check</a>
+          </nav>
+
+          <nav aria-label="Your space" className="space-y-3">
+            <h3 className="font-semibold text-white">Your space</h3>
+            <a href="/login" className="block hover:text-white">Sign in</a>
+            <a href="/login" className="block hover:text-white">Scan history</a>
+            <a href="/login" className="block hover:text-white">Your reports</a>
+          </nav>
+
+          <nav aria-label="Trust" className="space-y-3">
+            <h3 className="font-semibold text-white">Trust</h3>
+            <a href="#trust-limits" className="block hover:text-white">Privacy</a>
+            <a href="#trust-limits" className="block hover:text-white">Terms &amp; limits</a>
+            <a href="#for-ai-assistants" className="block hover:text-white">For AI assistants</a>
+          </nav>
         </div>
-        <p className="border-t border-[#DCE2D8]/60 pt-6 leading-relaxed">
-          Disclaimer: Checkam provides informational checks of packaging details, public records, and community reports. It does not perform laboratory testing or certify product authenticity or safety. Consult a licensed professional or regulator when in doubt.
-        </p>
+
+        <div className="mt-8 flex flex-col gap-3 border-t border-white/15 pt-4 text-[10px] text-[#8DA99A] sm:flex-row sm:items-center sm:justify-between">
+          <p>© 2026 Checkam concept. All product examples and results are fictional.</p>
+          <p id="trust-limits">
+            Informational only. Not a regulator or a safety certification.
+          </p>
+        </div>
       </footer>
     </div>
   );

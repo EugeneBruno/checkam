@@ -1,26 +1,32 @@
 import { useState } from "react";
 import {
-  IconArrowLeft,
-  IconArrowRight,
-  IconEye,
-  IconEyeOff,
-  IconInfoCircle,
-  IconLockSquare,
-  IconMail,
-  IconScan,
-} from "@tabler/icons-react";
-
-const STORY_IMAGE =
-  "https://api.builder.io/api/v1/image/assets/TEMP/06da568bc6a8e2175652150bcc62bbad24570645?width=1064";
+  ArrowLeft as IconArrowLeft,
+  ArrowRight as IconArrowRight,
+  Eye as IconEye,
+  EyeOff as IconEyeOff,
+  Info as IconInfoCircle,
+  LockKeyhole as IconLockSquare,
+  Mail as IconMail,
+  ScanLine as IconScan,
+} from "lucide-react";
+import checkAmLogo from "../public/Check Am Logo.jpeg";
+import loginScan from '../public/pexels-helenalopes-27175526.jpg';
 
 function WelcomeStory() {
   return (
     <aside className="flex w-full shrink-0 flex-col gap-11 bg-[#123E30] px-6 py-12 sm:p-16 lg:min-h-screen lg:w-165">
-      <div className="flex items-center gap-2.25">
-        <div className="flex h-8.5 w-8 items-center justify-center rounded-2.25 bg-[#F7F7F0]">
-          <IconScan size={22} stroke={1.7} color="#123E30" />
-        </div>
-        <span className="font-dm text-6.25 text-[#F7F7F0]">CheckAm</span>
+      <div className="flex items-center">
+        <a
+          href="/"
+          aria-label="Checkam home"
+          className="flex h-20 w-44 items-center justify-center overflow-hidden rounded-lg bg-white px-2"
+        >
+          <img
+            src={checkAmLogo}
+            alt="Checkam"
+            className="h-full w-full object-cover"
+          />
+        </a>
       </div>
       <div className="flex flex-col gap-5">
         <span className="font-mono-plex text-xs font-medium uppercase text-[#BCD0C1]">
@@ -37,14 +43,14 @@ function WelcomeStory() {
         </p>
       </div>
       <img
-        src={STORY_IMAGE}
+        src={loginScan}
         alt=""
         className="h-82.5 w-full rounded-2xl object-cover"
       />
       <div className="flex items-start gap-3">
         <IconInfoCircle
           size={20}
-          stroke={1.7}
+        strokeWidth={1.7}
           color="#BCD0C1"
           className="shrink-0"
         />
@@ -75,8 +81,8 @@ export default function LoginPage() {
           href="/"
           className="flex items-center justify-end gap-2 font-dm text-sm text-[#18543F] hover:underline"
         >
-          <IconArrowLeft size={16} stroke={1.7} />
-          Back to TrueCheck
+          <IconArrowLeft size={16} strokeWidth={1.7} />
+          Back to CheckAm
         </a>
 
         <form
@@ -108,7 +114,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className={inputCls}
               />
-              <IconMail size={18} stroke={1.7} color="#18543F" />
+              <IconMail size={18} strokeWidth={1.7} color="#18543F" />
             </div>
           </label>
 
@@ -133,9 +139,9 @@ export default function LoginPage() {
                   className="text-[#18543F]"
                 >
                   {showPassword ? (
-                    <IconEyeOff size={18} stroke={1.7} />
+                    <IconEyeOff size={18} strokeWidth={1.7} />
                   ) : (
-                    <IconEye size={18} stroke={1.7} />
+                    <IconEye size={18} strokeWidth={1.7} />
                   )}
                 </button>
               </div>
@@ -154,12 +160,12 @@ export default function LoginPage() {
             type="submit"
             className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 font-dm text-3.75 text-white transition-colors hover:bg-[#123E30]"
           >
-            <IconArrowRight size={19} stroke={1.7} />
+            <IconArrowRight size={19} strokeWidth={1.7} />
             Sign in
           </button>
 
           <div className="flex items-start justify-center gap-1.5 font-dm text-sm">
-            <span className="text-[#64746B]">New to TrueCheck?</span>
+            <span className="text-[#64746B]">New to CheckAm?</span>
             <a href="#" className="text-[#18543F] hover:underline">
               Create an account
             </a>
@@ -175,7 +181,7 @@ export default function LoginPage() {
             type="button"
             className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#DCE2D8] bg-white px-5 font-dm text-3.75 text-[#18543F] transition-colors hover:bg-[#F7F7F0]"
           >
-            <IconScan size={19} stroke={1.7} />
+            <IconScan size={19} strokeWidth={1.7} />
             Continue as guest
           </button>
 
@@ -187,7 +193,7 @@ export default function LoginPage() {
 
         <div className="flex w-full flex-col gap-3">
           <div className="flex items-center gap-2">
-            <IconLockSquare size={15} stroke={1.7} color="#18543F" />
+            <IconLockSquare size={15} strokeWidth={1.7} color="#18543F" />
             <span className="font-dm text-3.25 font-semibold text-[#18543F]">
               Your checks are yours.
             </span>
