@@ -16,7 +16,7 @@ venv/
 # Local NAFDAC source data and database
 nafdac-scraper/output/
 nafdac-scraper/output2/
-data/*.sqlite3
+# data/*.sqlite3
 data/*.db
 
 # Python generated files
