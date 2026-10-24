@@ -65,6 +65,26 @@ function Reason({ kind, check }) {
   )
 }
 
+function ScoreDial({ score, color }) {
+  const value = Math.max(0, Math.min(100, Number(score) || 0))
+  const r = 44
+  const c = 2 * Math.PI * r
+  return (
+    <div className="score-dial" aria-label={`Trust score ${value} out of 100`}>
+      <svg viewBox="0 0 100 100" width="112" height="112" aria-hidden="true">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="8" />
+        <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - value / 100)} transform="rotate(-90 50 50)" className="score-dial-arc" />
+      </svg>
+      <div className="score-dial-text" style={{ color }}>
+        <strong>{value}</strong>
+        <small>/ 100</small>
+      </div>
+      <p className="score-dial-label">Trust score</p>
+    </div>
+  )
+}
+
 function VerdictCard({ response, checks }) {
   const v = VERDICTS[response.verdict] || VERDICTS.insufficient_evidence
   const tone = TONE[v.tone]
@@ -78,10 +98,15 @@ function VerdictCard({ response, checks }) {
   ]
   return (
     <section className="telemetry-card verdict-card" style={{ background: tone.bg, borderColor: tone.border, borderWidth: 2 }} aria-label="Verdict">
-      <p className="telemetry-kicker" style={{ color: tone.text }}>VERDICT</p>
-      <h2 className="verdict-title" style={{ color: tone.text }}>{v.label}</h2>
-      <p className="verdict-action" style={{ color: tone.text }}>{RECOMMENDATIONS[response.recommendation] || response.recommendation}</p>
-      <p style={{ color: tone.text, marginTop: '0.5rem' }}>{v.meaning}</p>
+      <div className="verdict-top">
+        <div>
+          <p className="telemetry-kicker" style={{ color: tone.text }}>VERDICT</p>
+          <h2 className="verdict-title" style={{ color: tone.text }}>{v.label}</h2>
+          <p className="verdict-action" style={{ color: tone.text }}>{RECOMMENDATIONS[response.recommendation] || response.recommendation}</p>
+          <p style={{ color: tone.text, marginTop: '0.5rem' }}>{v.meaning}</p>
+        </div>
+        <ScoreDial score={response.trust_score} color={tone.border} />
+      </div>
 
       {reasons.length > 0 && <div style={{ marginTop: '1rem' }}>
         <p style={{ fontWeight: 600, color: tone.text }}>Why</p>
@@ -95,7 +120,6 @@ function VerdictCard({ response, checks }) {
       </p>}
 
       <div className="summary-meta" style={{ marginTop: '0.9rem' }}>
-        <span>Trust score {response.trust_score ?? '–'} / 100</span>
         <span>Confidence: {CONFIDENCE[response.confidence] || response.confidence || '–'}</span>
         <span>{problems.length} problem{problems.length === 1 ? '' : 's'} · {oks.length} confirmed · {gaps.length} not confirmed</span>
         {response.prior_reports > 0 && <span>{response.prior_reports} buyer report{response.prior_reports === 1 ? '' : 's'}</span>}
