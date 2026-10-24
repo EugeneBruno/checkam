@@ -33,6 +33,7 @@ WAIT_S = 240
 SHOTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "napams_screenshots")
 
 INPUT_SELECTORS = [
+    'input[placeholder*="certificate" i]',
     'input[placeholder*="NRN" i]', 'input[placeholder*="registration" i]', 'input[placeholder*="reg" i]',
     'input[placeholder*="number" i]', 'input[name*="reg" i]', 'input[id*="reg" i]', 'input[name*="nrn" i]',
     '#verify input[type="text"]', '#verify input:not([type])', 'input[type="search"]',
@@ -88,7 +89,8 @@ def open_napams(page):
     try:
         page.goto(NAPAMS_URL, wait_until="commit", timeout=LOAD_BUDGET_MS)
         left = max(100, LOAD_BUDGET_MS - int((time.time() - start) * 1000))
-        page.wait_for_selector("input", state="visible", timeout=left)
+        # the page has hidden inputs too, so wait for the first VISIBLE one (the number box)
+        page.locator("input:visible").first.wait_for(state="visible", timeout=left)
         return True
     except Exception:
         return False
