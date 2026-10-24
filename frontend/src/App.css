@@ -955,3 +955,21 @@ textarea:focus, .field input:focus { border-color: #79ae8b; outline: none; }
 @media (max-width: 640px) {
   .verdict-top { flex-direction: column-reverse; align-items: flex-start; }
 }
+
+/* result: your photos */
+.photos-title { margin: 2px 0 10px; color: #254535; font-size: 20px; font-weight: 700; }
+.photo-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.photo-strip img { flex: 0 0 auto; height: 130px; width: auto; max-width: 220px; object-fit: cover; border-radius: 10px; border: 1px solid #dfe8df; }
+.read-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.read-list li { padding-left: 22px; text-indent: -22px; }
+.read-list li span { display: inline-block; width: 22px; text-indent: 0; }
+.read-list span { font-weight: 700; }
+.read-ok span { color: #2e7a4a; }
+.read-missing { color: #8a5a12; }
+.read-missing span { color: #c8463b; }
+.photo-tip { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: #fff4de; color: #7a4e06; font-size: 14px; }
+/* scan: photo guidance */
+.photo-guide { margin: 12px 0; padding: 12px 14px; border: 1px solid #dfe8df; border-radius: 12px; background: #f6faf5; color: #254535; font-size: 14px; }
+.photo-guide ul { margin: 6px 0; padding-left: 18px; }
+.photo-guide small { color: #64746b; }
+@media (max-width: 640px) { .photo-strip img { height: 110px; } }

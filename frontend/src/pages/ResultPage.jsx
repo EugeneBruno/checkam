@@ -315,6 +315,57 @@ function ScanAgainBar({ response, intake, onScanAgain }) {
   )
 }
 
+// What a good set of photos should show, by product type, and whether we managed to read it
+function readChecklist(response) {
+  const p = response?.product || {}
+  const ids = p.identifiers || {}
+  const cat = p.category || 'other'
+  const nafdac = ['drug', 'cosmetic', 'food', 'drink', 'spirits', 'water', 'herbal', 'medical_device'].includes(cat)
+  const son = ['electrical', 'electronics', 'auto_part', 'building_material'].includes(cat)
+  const rows = [['Brand and product name', p.brand || p.name]]
+  if (nafdac) {
+    rows.push(['NAFDAC number', ids.nafdac_no])
+    rows.push(['Batch number', ids.batch])
+    rows.push(['Expiry date', ids.expiry])
+    rows.push(['Barcode', ids.barcode])
+  } else if (cat === 'phone') {
+    rows.push(['IMEI on the box', ids.imei])
+    rows.push(['IMEI on the phone (*#06#)', ids.imei_device])
+  } else if (son) {
+    rows.push(['SON mark (MANCAP, NIS or PAM)', (ids.son_marks || []).join(', ')])
+    rows.push(['Model / serial label', ids.serial || p.variant])
+  } else {
+    rows.push(['Barcode', ids.barcode])
+  }
+  return rows
+}
+
+function PhotosCard({ photos, response }) {
+  const rows = readChecklist(response)
+  const missing = rows.filter(([, v]) => !v)
+  return (
+    <section className="telemetry-card photos-card" aria-label="Your photos">
+      <p className="telemetry-kicker">YOUR PHOTOS</p>
+      <h2 className="photos-title">What we were working from</h2>
+      {photos?.length > 0
+        ? <div className="photo-strip">{photos.map((src, i) => <img key={i} src={src} alt={`Photo ${i + 1} you sent`} />)}</div>
+        : <p className="verification-caption">No photos were sent for this check (typed details only).</p>}
+      <ul className="read-list">
+        {rows.map(([label, value]) => (
+          <li key={label} className={value ? 'read-ok' : 'read-missing'}>
+            <span aria-hidden="true">{value ? '✓' : '✗'}</span>
+            <strong>{label}:</strong> {value ? String(value) : 'not readable in your photos'}
+          </li>
+        ))}
+      </ul>
+      {missing.length > 0 && <p className="photo-tip">
+        <strong>For a better result,</strong> take a close, sharp, well-lit photo of the {missing.map(([l]) => (l.startsWith('NAFDAC') || l.startsWith('IMEI') || l.startsWith('SON') ? l : l.toLowerCase())).join(', ')}.
+        Hold the phone steady, fill the frame with the label, and avoid glare.
+      </p>}
+    </section>
+  )
+}
+
 function ResultPage({ result, onBack, onScanAgain }) {
   const { intake, scanId, completedAt } = result
   const [response, setResponse] = useState(result.response || null)
@@ -356,6 +407,7 @@ function ResultPage({ result, onBack, onScanAgain }) {
         {response && <>
           <VerdictCard response={response} checks={checks} />
           <ScanAgainBar response={response} intake={intake} onScanAgain={onScanAgain} />
+          <PhotosCard photos={result.photos} response={response} />
           <ProductCard response={response} />
           <EvidenceGroups checks={checks} />
           <ActionsCard response={response} intake={intake} onUpdate={(next) => {

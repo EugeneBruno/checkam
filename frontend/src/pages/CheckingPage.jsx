@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import AgentThoughtLog from '../components/checking/AgentThoughtLog.jsx'
 import StepProgressTracker from '../components/checking/StepProgressTracker.jsx'
 import checkAmLogo from '../public/Check_Am_Logo-removebg-preview.png'
-import { API_URL, takePendingFiles, verify } from '../api.js'
+import { API_URL, makeThumbnails, takePendingFiles, verify } from '../api.js'
 import BrandLoader from '../components/brand/BrandLoader.jsx'
 
 // What the Check Am backend does for every scan, in order (see backend/pipeline.py)
@@ -169,7 +169,8 @@ function CheckingPage({ intake, scanId, onBack, onComplete }) {
         }),
       }
     }
-    requestRef.current.promise.then((response) => {
+    const thumbsPromise = makeThumbnails(files)
+    Promise.all([requestRef.current.promise, thumbsPromise]).then(([response, photos]) => {
       if (cancelled) return
       completedRef.current = true
       timers.forEach(window.clearTimeout)
@@ -185,7 +186,7 @@ function CheckingPage({ intake, scanId, onBack, onComplete }) {
       addEvent('Verdict', `${String(response.verdict || '').replace(/_/g, ' ')} · trust score ${response.trust_score ?? '–'}`, 'done')
       setActiveIndex(PIPELINE.length - 1)
       setRunStatus('completed')
-      window.setTimeout(() => onComplete({ scanId, intake, checks: finalChecks, response }), 1200)
+      window.setTimeout(() => onComplete({ scanId, intake, checks: finalChecks, response, photos }), 1200)
     }).catch((error) => {
       if (cancelled) return
       completedRef.current = true

@@ -337,6 +337,16 @@ function ScanPage({ isActive = true, onBack, onStartResearch, initialProduct = n
                 </div>}
             </div>
             {cameraError && <p className="inline-error" role="alert">{cameraError}</p>}
+            <div className="photo-guide" role="note">
+              <strong>Take clear photos of:</strong>
+              <ul>
+                <li>the front (brand and product name)</li>
+                <li>the NAFDAC number, and the batch and expiry dates (drinks, food, drugs, cosmetics)</li>
+                <li>the barcode, close up</li>
+                <li>phones: the IMEI sticker on the box, and *#06# on the phone. Electricals: the SON mark and rating label</li>
+              </ul>
+              <small>Close, sharp and well lit. Fill the frame with the label and avoid glare. If a number is blurry, we can’t check it.</small>
+            </div>
             <MediaUploader
               attachments={attachments}
               isCameraOpen={Boolean(stream)}
