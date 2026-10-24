@@ -3,6 +3,7 @@ import CheckingPage from './pages/CheckingPage.jsx'
 import ResultPage from './pages/ResultPage.jsx'
 import ScanPage from './pages/ScanPage.jsx'
 import DemoPresetToolbar from './components/scan/DemoPresetToolbar.jsx'
+import viteLogo from './assets/vite.svg'
 import './App.css'
 
 function readSavedScan(scanId) {
@@ -74,12 +75,7 @@ function ArrowIcon({ diagonal = false }) {
 
 function CheckAmMark() {
   return (
-    <span className="landing-mark" aria-hidden="true">
-      <svg viewBox="0 0 36 36">
-        <path d="M27.5 11.5a12 12 0 1 0 2.2 12.8" />
-        <path d="m15 18 4 4 10-11" />
-      </svg>
-    </span>
+    <img className="landing-mark" src={viteLogo} alt="" />
   )
 }
 
@@ -216,8 +212,7 @@ function App() {
                 <div className="landing-bottle-body">
                   <span className="landing-bottle-leaf">✳</span>
                   <strong>BRIGHT<br />WELL</strong>
-                  <small>DAILY DEFENSE<br />SPF 50</small>
-                  <i>50 ml</i>
+                  
                 </div>
               </div>
               <span className="landing-scan-corner corner-one" />

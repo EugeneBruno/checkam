@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import AgentThoughtLog from '../components/checking/AgentThoughtLog.jsx'
 import SimulatedTelemetry from '../components/checking/SimulatedTelemetry.jsx'
 import StepProgressTracker from '../components/checking/StepProgressTracker.jsx'
+import viteLogo from '../assets/vite.svg'
 
 const demoSteps = [
   {
@@ -308,7 +309,7 @@ function CheckingPage({ intake, scanId, onBack, onComplete }) {
     <main className="app-shell checking-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="CheckAm home" onClick={(event) => { event.preventDefault(); onBack() }}>
-          <span className="brand-mark">c</span>
+          <img className="brand-mark" src={viteLogo} alt="" />
           <span>CheckAm<span className="brand-dot">.</span></span>
         </a>
         <div className="topbar-status"><span className="status-dot" /> Research workspace</div>

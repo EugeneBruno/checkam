@@ -3,6 +3,7 @@ import ManualInputForm from '../components/scan/ManualInputForm.jsx.jsx'
 import MediaUploader from '../components/scan/MediaUploader.jsx'
 import SituationToggle from '../components/scan/SituationToggle.jsx'
 import VideoRecorder from '../components/scan/VideoRecorder.jsx'
+import viteLogo from '../assets/vite.svg'
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -283,7 +284,7 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
             onBack()
           }
         }}>
-          <span className="brand-mark">c</span>
+          <img className="brand-mark" src={viteLogo} alt="" />
           <span>CheckAm<span className="brand-dot">.</span></span>
         </a>
         <div className="topbar-status"><span className="status-dot" /> Secure intake workspace</div>

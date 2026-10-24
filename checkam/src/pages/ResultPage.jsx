@@ -1,3 +1,5 @@
+import viteLogo from '../assets/vite.svg'
+
 function ResultPage({ result, onBack }) {
   const { intake, checks, scanId, completedAt } = result
   const flagged = checks.filter((check) => check.status === 'failed' || check.status === 'warning')
@@ -11,7 +13,7 @@ function ResultPage({ result, onBack }) {
     <main className="app-shell result-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="CheckAm home" onClick={(event) => { event.preventDefault(); onBack() }}>
-          <span className="brand-mark">c</span>
+          <img className="brand-mark" src={viteLogo} alt="" />
           <span>CheckAm<span className="brand-dot">.</span></span>
         </a>
         <div className="topbar-status"><span className="status-dot" /> Review summary</div>
