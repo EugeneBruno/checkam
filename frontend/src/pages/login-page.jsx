@@ -32,7 +32,7 @@ function WelcomeStory() {
         <span className="font-mono-plex text-xs font-medium uppercase text-[#BCD0C1]">
           Your everyday second look
         </span>
-        <h2 className="font-dm text-10 font-normal leading-[1.08] sm:text-14.5 text-[#F7F7F0]">
+        <h2 className="font-dm text-[2.5rem] font-normal leading-[1.08] sm:text-[3.625rem] text-[#F7F7F0]">
           A little more clarity.
           <br />
           Every time you check.
@@ -54,7 +54,7 @@ function WelcomeStory() {
           color="#BCD0C1"
           className="shrink-0"
         />
-        <p className="font-dm text-3.25 leading-normal text-[#BCD0C1]">
+        <p className="font-dm text-[0.8125rem] leading-normal text-[#BCD0C1]">
           Evidence to support your decisions. Not a regulator endorsement,
           laboratory test or safety guarantee.
         </p>
@@ -93,10 +93,10 @@ export default function LoginPage() {
             <span className="font-mono-plex text-xs font-medium uppercase text-[#18543F]">
               Welcome back
             </span>
-            <h1 className="font-dm text-8.5 font-semibold leading-normal text-[#123E30] sm:text-10.5">
+            <h1 className="font-dm text-[2.125rem] font-semibold leading-normal text-[#123E30] sm:text-[2.625rem]">
               Your checks, in one place.
             </h1>
-            <p className="font-dm text-4.25 leading-normal text-[#64746B]">
+            <p className="font-dm text-[1.0625rem] leading-normal text-[#64746B]">
               Sign in to pick up where you left off.
             </p>
           </div>
@@ -158,7 +158,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 font-dm text-3.75 text-white transition-colors hover:bg-[#123E30]"
+            className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 font-dm text-[0.9375rem] text-white transition-colors hover:bg-[#123E30]"
           >
             <IconArrowRight size={19} strokeWidth={1.7} />
             Sign in
@@ -179,13 +179,13 @@ export default function LoginPage() {
 
           <button
             type="button"
-            className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#DCE2D8] bg-white px-5 font-dm text-3.75 text-[#18543F] transition-colors hover:bg-[#F7F7F0]"
+            className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#DCE2D8] bg-white px-5 font-dm text-[0.9375rem] text-[#18543F] transition-colors hover:bg-[#F7F7F0]"
           >
             <IconScan size={19} strokeWidth={1.7} />
             Continue as guest
           </button>
 
-          <p className="font-dm text-3.25 leading-normal text-[#64746B]">
+          <p className="font-dm text-[0.8125rem] leading-normal text-[#64746B]">
             You don’t need an account to check a product. Sign in only when you
             want to keep a personal history.
           </p>
@@ -194,7 +194,7 @@ export default function LoginPage() {
         <div className="flex w-full flex-col gap-3">
           <div className="flex items-center gap-2">
             <IconLockSquare size={15} strokeWidth={1.7} color="#18543F" />
-            <span className="font-dm text-3.25 font-semibold text-[#18543F]">
+            <span className="font-dm text-[0.8125rem] font-semibold text-[#18543F]">
               Your checks are yours.
             </span>
           </div>

@@ -3,7 +3,7 @@ import ManualInputForm from '../components/scan/ManualInputForm.jsx.jsx'
 import MediaUploader from '../components/scan/MediaUploader.jsx'
 import SituationToggle from '../components/scan/SituationToggle.jsx'
 import VideoRecorder from '../components/scan/VideoRecorder.jsx'
-import viteLogo from '../assets/vite.svg'
+import checkAmLogo from '../public/Check_Am_Logo-removebg-preview.png'
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -284,10 +284,13 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
             onBack()
           }
         }}>
-          <img className="brand-mark" src={viteLogo} alt="" />
-          <span>CheckAm<span className="brand-dot">.</span></span>
+          <img
+            src={checkAmLogo}
+            alt="CheckAm"
+           className="absolute left-0 -top-4 h-auto w-40 max-w-none"
+          />
         </a>
-        <div className="topbar-status"><span className="status-dot" /> Secure intake workspace</div>
+        <div className="topbar-status ml-16" ><span className="status-dot" /> Secure intake workspace</div>
         <span className="privacy-note"><Icon>◈</Icon> Your media stays in this browser</span>
       </header>
 

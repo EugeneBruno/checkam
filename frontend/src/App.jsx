@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle as IconAlertTriangle,
   ArrowUpRight,
@@ -19,6 +19,10 @@ import {
   ChevronRight,
   CheckCircle2,
 } from "lucide-react";
+import CheckingPage from "./pages/CheckingPage.jsx";
+import ResultPage from "./pages/ResultPage.jsx";
+import ScanPage from "./pages/ScanPage.jsx";
+import DemoPresetToolbar from "./components/scan/DemoPresetToolbar.jsx";
 import checkAmLogo from "./public/Check_Am_Logo-removebg-preview.png";
 import scanImage from "./public/pexels-kampus-8476600.jpg";
 
@@ -31,6 +35,34 @@ const sources = [
   "Packaging & labels",
   "Community history",
 ];
+function readSavedScan(scanId) {
+  if (!scanId) return null;
+  const saved = window.sessionStorage.getItem(`checkam:scan:${scanId}`);
+  return saved ? JSON.parse(saved) : null;
+}
+
+function initialNavigation() {
+  const path = window.location.pathname;
+  const resultId = path.match(/^\/result\/([^/]+)$/)?.[1];
+  const scanId =
+    resultId ||
+    window.history.state?.scanId ||
+    window.sessionStorage.getItem("checkam:active-scan-id");
+  const savedScan = readSavedScan(scanId);
+
+  if (resultId && savedScan) {
+    return { page: "result", result: savedScan, intake: savedScan.intake, scanId };
+  }
+  if (path === "/checking" && savedScan) {
+    return { page: "checking", result: null, intake: savedScan.intake, scanId };
+  }
+  if (path === "/scan" || window.history.state?.screen === "intake") {
+    return { page: "intake", result: null, intake: null, scanId: null };
+  }
+  return { page: "home", result: null, intake: null, scanId: null };
+}
+
+
 
 const methods = [
   {
@@ -95,11 +127,126 @@ const agentSteps = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("before");
+  const [navigation, setNavigation] = useState(initialNavigation);
+  const { page, result, intake, scanId } = navigation;
+
+  useEffect(() => {
+    function restoreHistoryState(event) {
+      const path = window.location.pathname;
+      const resultId = path.match(/^\/result\/([^/]+)$/)?.[1];
+      const activeScanId = resultId || event.state?.scanId;
+      const savedScan = readSavedScan(activeScanId);
+
+      if (resultId && savedScan) {
+        setNavigation({
+          page: "result",
+          result: savedScan,
+          intake: savedScan.intake,
+          scanId: resultId,
+        });
+      } else if (
+        path === "/checking" &&
+        (event.state?.intake || savedScan?.intake)
+      ) {
+        setNavigation({
+          page: "checking",
+          result: null,
+          intake: event.state?.intake || savedScan.intake,
+          scanId: activeScanId,
+        });
+      } else if (
+        path === "/scan" ||
+        event.state?.screen === "intake"
+      ) {
+        setNavigation({ page: "intake", result: null, intake: null, scanId: null });
+      } else {
+        setNavigation({ page: "home", result: null, intake: null, scanId: null });
+      }
+    }
+
+    window.addEventListener("popstate", restoreHistoryState);
+    return () => window.removeEventListener("popstate", restoreHistoryState);
+  }, []);
+
+  function navigateToChecking(nextIntake) {
+    const id = window.crypto.randomUUID();
+    const scanIntake = { ...nextIntake, id };
+    const savedScan = {
+      scanId: id,
+      intake: scanIntake,
+      createdAt: new Date().toISOString(),
+    };
+    window.sessionStorage.setItem(`checkam:scan:${id}`, JSON.stringify(savedScan));
+    window.sessionStorage.setItem("checkam:active-scan-id", id);
+    const returnToScan = page === "intake";
+    window.history.pushState(
+      { screen: "checking", intake: scanIntake, scanId: id, returnToScan },
+      "",
+      "/checking",
+    );
+    setNavigation({ page: "checking", result: null, intake: scanIntake, scanId: id });
+  }
+
+  function navigateToResult(completedRun) {
+    const completedResult = {
+      ...completedRun,
+      completedAt: new Date().toISOString(),
+    };
+    window.sessionStorage.setItem(
+      `checkam:scan:${completedRun.scanId}`,
+      JSON.stringify(completedResult),
+    );
+    window.history.pushState(
+      { screen: "result", scanId: completedRun.scanId },
+      "",
+      `/result/${encodeURIComponent(completedRun.scanId)}`,
+    );
+    setNavigation({
+      page: "result",
+      result: completedResult,
+      intake: completedRun.intake,
+      scanId: completedRun.scanId,
+    });
+  }
+
+  function navigateToIntake() {
+    window.history.pushState({ screen: "intake" }, "", "/scan");
+    setNavigation({ page: "intake", result: null, intake: null, scanId: null });
+  }
+
+  function navigateHome() {
+    window.history.pushState({ screen: "home" }, "", "/");
+    setNavigation({ page: "home", result: null, intake: null, scanId: null });
+  }
+
+  function navigateBackFromChecking() {
+    const returnToScan = Boolean(window.history.state?.returnToScan);
+    window.history.pushState(
+      { screen: returnToScan ? "intake" : "home" },
+      "",
+      returnToScan ? "/scan" : "/",
+    );
+    setNavigation({
+      page: returnToScan ? "intake" : "home",
+      result: null,
+      intake: null,
+      scanId: null,
+    });
+  }
 
   return (
+    <>
+    {page === "intake" && (
+      <ScanPage
+        isActive
+        onBack={navigateHome}
+        onStartResearch={navigateToChecking}
+      />
+    )}
+    {page === "home" && (
     <div className="flex min-h-screen w-full flex-col bg-[#F7F7F0] font-['DM_Sans',sans-serif] text-[#203C32]">
       {/* ─── HEADER ─── */}
-      <header className="flex min-h-26 items-center justify-between gap-4 border-b border-[#DCE2D8] px-5 md:px-10 lg:px-20">
+      <header className="flex min-h-26 flex-wrap items-center justify-between gap-3 border-b border-[#DCE2D8] px-5 py-3 md:flex-nowrap md:px-4 md:py-0 lg:px-20">
         <a href="/" className="flex items-center gap-2.25">
           <span className="relative h-9 w-36 overflow-hidden" aria-hidden="true">
             <img
@@ -110,7 +257,7 @@ export default function App() {
           </span>
           <span className="sr-only">{checkAm}</span>
         </a>
-        <nav className="flex items-center gap-8">
+        <nav className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 md:w-auto md:flex-nowrap md:gap-4 lg:gap-8">
           {navLinks.map((link) => (
             <a
               key={link}
@@ -119,14 +266,18 @@ export default function App() {
                   ? "/login"
                   : `#${link.toLowerCase().replace(/\s+/g, "-")}`
               }
-              className="hidden text-sm font-medium text-[#203C32] hover:text-[#18543F] transition-colors lg:block"
+              className="text-xs font-medium text-[#203C32] transition-colors hover:text-[#18543F] sm:text-sm"
             >
               {link}
             </a>
           ))}
           <a
             href="/scan"
-            className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 text-center text-[15px] text-white hover:bg-[#123E30] transition-colors"
+            onClick={(event) => {
+              event.preventDefault();
+              navigateToIntake();
+            }}
+            className="flex h-13 items-center justify-center gap- rounded-lg border pr-8 border-[#18543F] bg-[#18543F] px-5 text-center text-[15px] text-white hover:bg-[#123E30] transition-colors"
           >
             <ArrowUpRight size={19} stroke={1.7} className="shrink-0" />
             Start a check
@@ -151,9 +302,13 @@ export default function App() {
             <div className="flex flex-wrap gap-3">
               <a
                 href="/scan"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateToIntake();
+                }}
                 className="flex h-13 items-center justify-center gap-3 rounded-lg border border-[#18543F] bg-[#18543F] px-5 text-center text-[15px] text-white hover:bg-[#123E30] transition-colors"
               >
-                <Scan size={19} stroke={1.7} className="shrink-0" />
+                <Scan size={19} stroke={1.7} className="shrink-0 items-center justify-center pr-8" />
                 Start a check
               </a>
               <a
@@ -253,6 +408,10 @@ export default function App() {
                 </div>
                 <a
                   href="/scan"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigateToIntake();
+                  }}
                   className="inline-flex items-center justify-center gap-2 text-center text-sm font-semibold text-[#18543F] hover:text-[#123E30] transition-colors"
                 >
                   <span>{method.label}</span>
@@ -546,7 +705,7 @@ export default function App() {
         {/* Closing call to action */}
         <div className="-mx-5 mt-16 flex flex-col items-start justify-between gap-6 bg-[#E8F0E8] px-5 py-10 sm:flex-row sm:items-center md:-mx-10 md:px-10 lg:-mx-20 lg:px-20">
           <div>
-            <p className="mb-2 font-['IBM_Plex_Mono',monospace] text-[10px] font-medium uppercase tracking-wide text-[#18543F]">
+            <p className="mb-2 font-['IBM_Plex_Mono',monospace] text-[14px] font-medium uppercase tracking-wide text-[#18543F]">
               A small check, a more informed choice.
             </p>
             <h3 className="text-2xl font-semibold text-[#123E30]">
@@ -559,6 +718,10 @@ export default function App() {
           <div className="shrink-0">
             <a
               href="/scan"
+              onClick={(event) => {
+                event.preventDefault();
+                navigateToIntake();
+              }}
               className="flex h-12 items-center justify-center gap-2 rounded-lg bg-[#18543F] px-6 text-center text-sm font-semibold text-white transition-colors hover:bg-[#123E30]"
             >
               <Scan size={16} className="shrink-0" />
@@ -580,7 +743,7 @@ export default function App() {
                 <img
                   src={checkAmLogo}
                   alt="CheckAm"
-                  className="h-full w-full object-contain"
+                  className="h-12 w-full object-contain"
                 />
               </span>
               <span className="text-sm font-semibold text-white">Checkam</span>
@@ -595,7 +758,16 @@ export default function App() {
 
           <nav aria-label="Explore" className="space-y-3">
             <h3 className="font-semibold text-white">Explore</h3>
-            <a href="/scan" className="block hover:text-white">Start a check</a>
+            <a
+              href="/scan"
+              onClick={(event) => {
+                event.preventDefault();
+                navigateToIntake();
+              }}
+              className="block hover:text-white"
+            >
+              Start a check
+            </a>
             <a href="#how-it-works" className="block hover:text-white">How it works</a>
             <a href="#what-we-check" className="block hover:text-white">What we check</a>
           </nav>
@@ -623,5 +795,19 @@ export default function App() {
         </div>
       </footer>
     </div>
+    )}
+    {page === "checking" && intake && (
+      <CheckingPage
+        intake={intake}
+        scanId={scanId}
+        onBack={navigateBackFromChecking}
+        onComplete={navigateToResult}
+      />
+    )}
+    {page === "result" && result && (
+      <ResultPage result={result} onBack={navigateHome} />
+    )}
+    {page !== "result" && <DemoPresetToolbar onSelect={navigateToChecking} />}
+    </>
   );
 }

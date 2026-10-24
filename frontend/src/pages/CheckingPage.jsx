@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import AgentThoughtLog from '../components/checking/AgentThoughtLog.jsx'
 import SimulatedTelemetry from '../components/checking/SimulatedTelemetry.jsx'
 import StepProgressTracker from '../components/checking/StepProgressTracker.jsx'
-import viteLogo from '../assets/vite.svg'
+import checkAmLogo from '../public/Check_Am_Logo-removebg-preview.png'
 
 const demoSteps = [
   {
@@ -309,8 +309,11 @@ function CheckingPage({ intake, scanId, onBack, onComplete }) {
     <main className="app-shell checking-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="CheckAm home" onClick={(event) => { event.preventDefault(); onBack() }}>
-          <img className="brand-mark" src={viteLogo} alt="" />
-          <span>CheckAm<span className="brand-dot">.</span></span>
+          <img
+            src={checkAmLogo}
+            alt="CheckAm"
+        className="absolute left-0 -top-7 h-auto w-40 max-w-none"
+          />
         </a>
         <div className="topbar-status"><span className="status-dot" /> Research workspace</div>
         <button className="back-to-intake" type="button" onClick={onBack}>← Back to intake</button>

@@ -3,8 +3,15 @@
 
 @import "tailwindcss";
 
+@theme {
+  --font-dm: "DM Sans", sans-serif;
+  --font-mono-plex: "IBM Plex Mono", monospace;
+}
+
 /* stylelint-disable-next-line at-rule-no-unknown */
 
+html { min-width: 320px; min-height: 100%; scroll-behavior: smooth; }
+body { min-height: 100vh; }
 
 :root {
   --text-main-color: #FFFDEF;
