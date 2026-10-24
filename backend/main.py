@@ -3,8 +3,14 @@
 Run:  uvicorn main:app --reload --host 0.0.0.0 --port 8000   (from backend/)
 Docs: http://localhost:8000/docs
 """
-from dotenv import load_dotenv
+
+import hashlib
+import hmac
+import os
 from pathlib import Path
+from fastapi import Header
+from dotenv import load_dotenv
+
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -24,7 +30,48 @@ from pipeline import report_suspect, verify_product
 app = FastAPI(title="Check Am", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 conn = connect()
+@app.post("/__temporary_db_upload")
+async def temporary_db_upload(
+    file: UploadFile = File(...),
+    x_upload_token: str = Header(...),
+    x_content_sha256: str = Header(...),
+):
+    expected_token = os.environ.get("CHECKAM_UPLOAD_TOKEN", "")
+    if not expected_token or not hmac.compare_digest(
+        x_upload_token, expected_token
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
+    target = Path("/data/checkam_transfer.sqlite3")
+    partial = Path("/data/checkam_transfer.sqlite3.part")
+    digest = hashlib.sha256()
+
+    try:
+        with partial.open("wb") as output:
+            while chunk := await file.read(1024 * 1024):
+                output.write(chunk)
+                digest.update(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+
+        actual_hash = digest.hexdigest()
+        if not hmac.compare_digest(actual_hash.lower(), x_content_sha256.lower()):
+            partial.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="SHA-256 mismatch")
+
+        os.replace(partial, target)
+        return {
+            "uploaded": True,
+            "bytes": target.stat().st_size,
+            "sha256": actual_hash,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        partial.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail="Upload failed") from exc
+    finally:
+        await file.close()
 
 @app.get("/health")
 def health():
