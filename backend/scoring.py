@@ -189,6 +189,12 @@ def next_step(product: dict, evidence: list, ctx: dict, verdict: str):
     if category == "fashion":
         return "Take a close photo of the logo and the inside tag"
 
+    if category in NAFDAC_CATEGORIES and not (product.get("brand") or product.get("name")) \
+            and not ids.get("nafdac_no") and not ids.get("barcode"):
+        return ("This pack shows no brand, NAFDAC number or barcode. If another side has a label, photograph it. "
+                "If not, it can't be verified: packaged food and drinks sold in Nigeria must carry a NAFDAC "
+                "number, so only buy unlabelled items from a seller you know.")
+
     if category in NAFDAC_CATEGORIES and not ids.get("nafdac_no"):
         candidate = ctx.get("registry_candidate") or {}
         if (
@@ -202,7 +208,8 @@ def next_step(product: dict, evidence: list, ctx: dict, verdict: str):
         return "Take a close photo of the NAFDAC number on the pack"
 
     if "confirm_on_napams" in ctx.get("flags", []):
-        return "Confirm this NAFDAC number on NAPAMS, then share a screenshot of the result"
+        return (f"We read the NAFDAC number as {ids.get('nafdac_no')}. Check it matches the pack exactly "
+                "(type the right one if not), then confirm it on NAPAMS and share a screenshot of the result")
 
     if not ids.get("batch") or "batch" in unreadable:
         return "Take a close photo of the batch number and expiry date"

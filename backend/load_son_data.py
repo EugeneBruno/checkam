@@ -11,7 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.db import DEFAULT_DB_PATH, get_connection
+try:
+    from backend.db import DEFAULT_DB_PATH, get_connection
+except ImportError:
+    from db import DEFAULT_DB_PATH, get_connection
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 

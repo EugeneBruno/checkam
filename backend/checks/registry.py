@@ -6,6 +6,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from normalize import REG_KEY_SQL, reg_key as squash_key
+
 NAME = "registry_fit"
 
 APPLIES_TO = {
@@ -80,6 +82,12 @@ def _evidence(
     )
 
 
+def _similar(left: str, right: str) -> bool:
+    """Tolerates OCR repeats and extra words: 'Always Always 3 in 1 Maxi Thick' ~ 'Always 3-In-1 Maxi Thick Pads'."""
+    from normalize import name_similarity
+    return bool(left and right) and name_similarity(left, right) >= 0.6
+
+
 def _contains_match(left: str, right: str) -> bool:
     if not left or not right:
         return False
@@ -88,6 +96,8 @@ def _contains_match(left: str, right: str) -> bool:
 
 def _source_label(row: Any) -> str:
     source = row["source"] or "nafdac_greenbook"
+    if source == "nafdac_greenbook_online":
+        return "NAFDAC Greenbook (online)"
     if source == "napams_user_confirmed":
         confirmed_at = row["confirmed_at"] or ""
         return f"NAPAMS user-confirmed record ({confirmed_at[:10]})".strip()
@@ -210,12 +220,8 @@ def run(product: dict, ctx: Any = None) -> dict:
 
     try:
         rows = connection.execute(
-            """
-            SELECT *
-            FROM registry_products
-            WHERE country = ? AND reg_key = ?
-            """,
-            (country, number),
+            "SELECT * FROM registry_products WHERE country = ? AND " + REG_KEY_SQL + " = ?",
+            (country, squash_key(number)),
         ).fetchall()
     except Exception as exc:
         return _evidence(
@@ -277,6 +283,7 @@ def run(product: dict, ctx: Any = None) -> dict:
         or not registered_name
         or _contains_match(claimed_name_normalized, registered_name)
         or _contains_match(registered_name, claimed_name_normalized)
+        or _similar(claimed_name_normalized, registered_name)
     )
 
     manufacturer_matches = (

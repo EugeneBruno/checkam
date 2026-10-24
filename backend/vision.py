@@ -17,6 +17,8 @@ no prose, with exactly these keys:
   "category": one of ["drug","cosmetic","food","drink","spirits","water","herbal","medical_device",
                       "phone","electronics","electrical","auto_part","building_material","fashion","other"],
   "category_confidence": "low" | "medium" | "high",
+  "looks_like": what the item visibly is, in a few words, even with no label (e.g. "plantain chips in a plain foil pouch"),
+  "label_present": true if the pack has any printed label or branding, false if it is plain/unlabelled,
   "brand": string or null,
   "name": product name as printed, or null,
   "variant": model / flavour / size / colourway, or null,
@@ -49,7 +51,8 @@ no prose, with exactly these keys:
   "unreadable": list of fields you could not read clearly (e.g. ["batch","expiry"])
 }
 
-Rules: never guess numbers. If a number is blurry, set it to null and add it to "unreadable".
+Rules: if the pack has no printed label, set print_quality to "unknown" (there is no print to judge).
+Never guess numbers. If a number is blurry, set it to null and add it to "unreadable".
 Copy identifiers exactly as printed, including dashes and letters."""
 
 

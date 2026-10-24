@@ -1,7 +1,7 @@
 """Send real photos to the running Check Am server and print the verdict.
 
 Start the server first (in another terminal), then:
-    python test_photo.py path\\to\\photo.jpg [more photos...] [--bought] [--state Lagos]
+    python test_photo.py path\\to\\photo.jpg [more photos...] [--bought] [--research] [--state Lagos]
 
 Examples:
     python test_photo.py C:\\Users\\me\\Pictures\\phone_box.jpg
@@ -40,7 +40,8 @@ def main(argv):
     print(f"Sending {len(files)} photo(s) to {URL}/verify ...")
     try:
         r = httpx.post(f"{URL}/verify", files=files,
-                       data={"situation": situation, "state": state}, timeout=180)
+                       data={"situation": situation, "state": state,
+                             "research": "true" if "--research" in argv else "false"}, timeout=180)
     except httpx.ConnectError:
         print("Can't reach the server. Is uvicorn running in another terminal?")
         return 1
@@ -54,6 +55,8 @@ def main(argv):
     j = r.json()
     p = j["product"]
     print(f"\nPRODUCT   {p.get('category')} | {p.get('brand')} | {p.get('name')} | {p.get('variant')}")
+    if p.get("looks_like"):
+        print(f"SEEN      {p['looks_like']}" + ("  (no label)" if p.get("label_present") is False else ""))
     print(f"IDS       {json.dumps({k: v for k, v in (p.get('identifiers') or {}).items() if v})}")
     if j.get("contents", {}).get("summary"):
         print(f"CONTENTS  {j['contents']['summary']}")
@@ -64,6 +67,21 @@ def main(argv):
     print(f"\nNEXT STEP {j['next_step']}")
     for link in j.get("links", []):
         print(f"LINK      {link['label']}: {link['url']}")
+    rt = j.get("route") or {}
+    if rt:
+        print(f"\nROUTE     {rt.get('path')}  ({rt.get('reason')})")
+    res = j.get("research")
+    if res:
+        print(f"\nRESEARCH  {'saved earlier' if res.get('cached') else 'new'}, "
+              f"{'verified by sources' if res.get('verified') else 'no specific product found, general tips only'}")
+        for st in res.get("steps") or []:
+            print(f"  - {st}")
+        if res.get("summary"):
+            print(f"  summary: {res['summary']}")
+        for src in (res.get("sources") or [])[:4]:
+            print(f"  source: {src['url']}")
+    if j.get("actions"):
+        print(f"ACTIONS   {', '.join(j['actions'])}")
     print(f"\nscan_id   {j['scan_id']}")
     return 0
 

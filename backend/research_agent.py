@@ -10,7 +10,7 @@ import re
 import time
 from urllib.parse import urlparse
 
-from normalize import name_similarity, reg_key
+from normalize import REG_KEY_SQL, name_similarity, reg_key
 
 RESEARCH_TIMEOUT_S = int(os.environ.get("CHECKAM_RESEARCH_TIMEOUT", "60"))
 
@@ -182,12 +182,15 @@ NAFDAC_CATS = {
 
 
 def _label(product):
+    """'Monster Energy' + 'Pipeline Punch' + 'Pipeline Punch, 440ml' -> 'Monster Energy Pipeline Punch'."""
     words, seen = [], set()
     for part in (product.get("brand"), product.get("name"), product.get("variant")):
-        for word in (part or "").split():
-            if word.lower() not in seen:
-                seen.add(word.lower())
-                words.append(word)
+        for w in re.split(r"[\s,;/]+", str(part or "")):
+            key = re.sub(r"[^a-z0-9]", "", w.lower())
+            if not key or key in seen or re.fullmatch(r"\d+(\.\d+)?(ml|l|cl|g|kg|mg|oz|pcs|pack|x)", key):
+                continue  # skip repeats and pack sizes: they make web searches worse
+            seen.add(key)
+            words.append(w.strip(",;"))
     return " ".join(words)
 
 
@@ -227,7 +230,7 @@ def _check_greenbook(gb, sources, step=None):
     page_words = set(
         re.findall(
             r"[a-z0-9]+",
-            (page.get("content") or "") + " " + (page.get("title") or ""),
+            ((page.get("content") or "") + " " + (page.get("title") or "")).lower(),
         )
     )
     if name_words and len(name_words & page_words) < max(1, len(name_words) // 2):
@@ -302,7 +305,7 @@ def route(conn, product):
         row = conn.execute(
             """
             SELECT source FROM registry_products
-            WHERE country = ? AND reg_key = ?
+            WHERE country = ? AND """ + REG_KEY_SQL + """ = ?
             ORDER BY CASE WHEN source = 'napams_user_confirmed' THEN 0 ELSE 1 END
             LIMIT 1
             """,
@@ -567,6 +570,7 @@ def research(product, progress=None):
                 types.GenerateContentConfig(response_mime_type="application/json"),
                 step,
             )
+            grounded = True  # the AI read only these retrieved pages; used_sources is checked below
         else:
             step("Web search returned no results")
 

@@ -78,3 +78,8 @@ def name_similarity(a: str, b: str) -> float:
     overlap = len(ta & tb) / min(len(ta), len(tb))
     ratio = SequenceMatcher(None, a.lower(), b.lower()).ratio()
     return max(overlap, ratio)
+
+
+# SQL for a registry_products.reg_key with spaces/dashes/slashes/dots removed, so "01-4278", "01 4278"
+# and "014278" all compare equal, whichever loader wrote the row. Compare it with reg_key(printed).
+REG_KEY_SQL = ("REPLACE(REPLACE(REPLACE(REPLACE(UPPER(reg_key), '-', ''), ' ', ''), '/', ''), '.', '')")

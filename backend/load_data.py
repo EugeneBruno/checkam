@@ -21,11 +21,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.db import (
-    DEFAULT_DB_PATH,
-    connect,
-    normalize_registration_number,
-)
+try:  # works from the repo root (python -m backend.load_data) and from backend/ (python load_data.py)
+    from backend.db import DEFAULT_DB_PATH, connect, normalize_registration_number
+except ImportError:
+    from db import DEFAULT_DB_PATH, connect, normalize_registration_number
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_JSON_PATH = (
@@ -381,6 +380,10 @@ DEMO_SCANS = [
 
 
 def seed_demo(db_path: str | Path = DEFAULT_DB_PATH) -> None:
+    try:
+        from backend.normalize import norm_batch, reg_key as scan_reg_key
+    except ImportError:
+        from normalize import norm_batch, reg_key as scan_reg_key
     connection = connect(db_path)
     try:
         for sid, category, brand, name, reg, batch, expiry, state in DEMO_SCANS:
@@ -391,7 +394,8 @@ def seed_demo(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                     expiry, state, verdict, trust_score, seeded, result_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', 50, 1, '{}')
                 """,
-                (sid, category, brand, name, reg_key(reg), batch, expiry, state),
+                # scans use the same keys as pipeline.py (normalize.py), so clone detection can match them
+                (sid, category, brand, name, scan_reg_key(reg), norm_batch(batch), expiry, state),
             )
         connection.commit()
     finally:

@@ -3,13 +3,16 @@
 Run:  uvicorn main:app --reload --host 0.0.0.0 --port 8000   (from backend/)
 Docs: http://localhost:8000/docs
 """
-from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
+try:  # keys can live in a .env file at the repo root (never commit it)
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
 
 import json
+import re
 from typing import List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -74,6 +77,14 @@ def report(body: ReportIn):
                           seller=body.seller, note=body.note, reporter="user")
 
 
+def clean_name(name, reg_no):
+    """'La Casera Apple Drink (01-4278)(01-4278)...' -> 'La Casera Apple Drink'."""
+    if not name:
+        return name
+    name = re.sub(r"\(\s*" + re.escape(reg_no) + r"\s*\)", " ", name)
+    return re.sub(r"\s+", " ", name).strip(" -,;")
+
+
 @app.post("/confirm-napams")
 async def confirm_napams(screenshot: UploadFile = File(...), expected_reg_no: Optional[str] = Form(None)):
     """User checked NAPAMS themselves and shares the result screenshot; we read it and store it."""
@@ -84,6 +95,7 @@ async def confirm_napams(screenshot: UploadFile = File(...), expected_reg_no: Op
         return {"ok": True, "found": False, "message": "NAPAMS shows no product for this number"}
     if expected_reg_no and reg_key(expected_reg_no) != reg_key(data["reg_no"]):
         raise HTTPException(422, "The screenshot is for a different NAFDAC number")
+    data["product_name"] = clean_name(data.get("product_name"), data["reg_no"])
     conn.execute(
         "INSERT INTO registry_products (country, source, reg_no, reg_key, product_name, category, applicant, "
         "approval_date, expiry_date, status, confirmed_at) VALUES ('NG','napams_user_confirmed',?,?,?,?,?,?,?,'active',"
@@ -94,6 +106,57 @@ async def confirm_napams(screenshot: UploadFile = File(...), expected_reg_no: Op
     conn.commit()
     return {"ok": True, "found": True, "record": data,
             "message": "Thanks, this NAFDAC number is now confirmed for everyone who scans it."}
+
+
+class NumberIn(BaseModel):
+    reg_no: str
+    category: Optional[str] = None
+    brand: Optional[str] = None
+    name: Optional[str] = None
+
+
+@app.post("/research-number")
+def research_number(body: NumberIn):
+    """Look a NAFDAC number up online (NAFDAC's Greenbook) when NAPAMS can't be reached; save a grounded match."""
+    import research_agent
+    from checks import NAFDAC_CATEGORIES
+    cat = body.category if body.category in NAFDAC_CATEGORIES else "food"
+    product = {"category": cat, "brand": body.brand, "name": body.name, "identifiers": {"nafdac_no": body.reg_no}}
+    try:
+        ref = research_agent.research(product)
+    except Exception as exc:
+        raise HTTPException(502, f"Research error ({type(exc).__name__}): {str(exc)[:300]}")
+    gb = ref.get("greenbook")
+    if gb and reg_key(gb["reg_no"]) == reg_key(body.reg_no) and gb.get("product_name"):
+        conn.execute(
+            "INSERT INTO registry_products (country, source, reg_no, reg_key, product_name, applicant, status, "
+            "detail_url, confirmed_at) VALUES ('NG','nafdac_greenbook_online',?,?,?,?,?,?,datetime('now')) "
+            "ON CONFLICT (country, source, reg_key, product_name) DO UPDATE SET confirmed_at = datetime('now')",
+            (gb["reg_no"], reg_key(gb["reg_no"]), gb["product_name"], gb.get("holder"),
+             (gb.get("status") or "").lower() or None, gb["url"]))
+        conn.commit()
+        return {"found": True, "record": gb, "steps": ref.get("steps", []),
+                "message": f"Found on NAFDAC's online Greenbook: {gb['reg_no']} = {gb['product_name']}"
+                           f" ({gb.get('holder') or 'holder unknown'}). Saved."}
+    if body.brand or body.name:
+        research_agent.save(conn, body.brand, body.name, None, ref)
+    return {"found": False, "record": None, "steps": ref.get("steps", []),
+            "message": f"{body.reg_no} wasn't found online either. Try NAPAMS again later; until then, "
+                       "scans of this number stay 'not confirmed'."}
+
+
+@app.post("/scans/{scan_id}/research")
+def research_scan(scan_id: str):
+    """'Research this product' button: research a saved scan's product online and re-check it (no new photos)."""
+    row = conn.execute("SELECT result_json, state, market FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Scan not found")
+    saved = json.loads(row["result_json"])
+    try:
+        return verify_product(conn, product=saved.get("product") or {}, situation=saved.get("situation", "before_buying"),
+                              location={"state": row["state"], "market": row["market"]}, research=True)
+    except Exception as exc:
+        raise HTTPException(502, f"Research error ({type(exc).__name__}): {str(exc)[:400]}")
 
 
 class NccResultIn(BaseModel):

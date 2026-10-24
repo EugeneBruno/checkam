@@ -7,3 +7,5 @@ google-genai
 mcp
 httpx
 pillow
+python-dotenv
+playwright  # only for napams_assist.py (human-in-the-loop NAPAMS checks)

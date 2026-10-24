@@ -44,6 +44,7 @@ def verify_product(
     save=True,
     progress=None,
     research=False,
+    product=None,
 ):
     """Identify a product, run checks, optionally research it, and save the scan.
 
@@ -55,10 +56,10 @@ def verify_product(
         if progress:
             progress(message)
 
-    # 1. Identify the product.
-    product = {}
+    # 1. Identify the product (or reuse one from a saved scan).
+    product = dict(product or {})
 
-    if images:
+    if images and not product:
         step("Identifying product")
         product = vision.identify(images)
 
@@ -323,6 +324,8 @@ def verify_product(
             "name": product.get("name"),
             "variant": product.get("variant"),
             "strength": product.get("strength"),
+            "looks_like": product.get("looks_like"),
+            "label_present": product.get("label_present"),
             "identifiers": ids,
         },
         "contents": product.get("contents") or {},

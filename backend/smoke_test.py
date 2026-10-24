@@ -16,6 +16,7 @@ os.chdir(HERE)
 sys.path.insert(0, HERE)
 os.environ["CHECKAM_DB"] = os.path.join(tempfile.mkdtemp(), "smoke.db")
 os.environ.pop("CHECKAM_NCC_LOOKUP", None)
+os.environ["CHECKAM_AUTO_RESEARCH"] = "0"  # smoke test never goes online
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -24,10 +25,11 @@ from db import connect  # noqa: E402
 
 conn = connect()
 DATA = os.path.join(HERE, "..", "data")
-load_data.load_greenbook(os.path.join(DATA, "greenbook_sample.json"), conn)
-load_data.load_fakes(os.path.join(DATA, "known_fakes.json"), conn)
-load_data.load_son(os.path.join(DATA, "son_certified.json"), conn)
-load_data.seed_demo(conn)
+DB = os.environ["CHECKAM_DB"]
+load_data.load_greenbook(os.path.join(DATA, "greenbook_sample.json"), DB)
+load_data.load_fakes(os.path.join(DATA, "known_fakes.json"), DB)
+load_data.load_son(os.path.join(DATA, "son_certified.json"), DB)
+load_data.seed_demo(DB)
 from checks import ncc  # noqa: E402
 ncc.save_user_result(conn, "490154203237518", 1, 1, "Nokia", "3110", "Nokia 3110 Classic")
 
@@ -41,7 +43,7 @@ CASES = [
                              "nafdac_no": "03-6090", "batch": "DEMO-SC2207", "expiry": "06/2027",
                              "barcode": "4015630982325"}, "likely_genuine", "matches"),
     ("Registry mismatch", {"category": "cosmetic", "brand": "Glow", "name": "Shea Butter Cream",
-                           "nafdac_no": "A3-100882"}, "likely_fake", "belongs to a different product"),
+                           "nafdac_no": "A3-100882"}, "likely_fake", "is associated with"),
     ("Clone (batch, other expiry)", {"category": "medical_device", "brand": "Always", "name": "Always 3-in-1 Maxi Thick",
                                      "nafdac_no": "03-2099", "batch": "DEMO-AL5531", "expiry": "2028-09"},
      "likely_fake", "different expiry"),
@@ -50,7 +52,7 @@ CASES = [
      "likely_fake", "NAFDAC alert"),
     ("Number not in our data", {"category": "drug", "brand": "Paramax", "name": "Paramax 500mg",
                                 "nafdac_no": "A4-9999", "batch": "SMOKE-1", "expiry": "2027-05"},
-     "insufficient_evidence", "not in our records"),
+     "insufficient_evidence", "not found in the local Greenbook"),
     ("Phone: NCC verified, box = phone", {"category": "phone", "brand": "Nokia", "name": "3110 Classic",
                                          "imei": "490154203237518", "imei_device": "490154203237518"},
      "likely_genuine", "Verified by NCC"),

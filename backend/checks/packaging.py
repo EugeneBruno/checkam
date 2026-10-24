@@ -8,6 +8,9 @@ CRITICAL = False
 def run(product, ctx):
     from checks import result
     pk = product.get("packaging") or {}
+    if product.get("label_present") is False:
+        return result(NAME, "unknown", "Plain pack with no label: no brand, ingredients, dates or NAFDAC number "
+                      "to check", "Photo analysis", weight=0)
     errors = pk.get("spelling_errors") or []
     quality = (pk.get("print_quality") or "unknown").lower()
     if errors:

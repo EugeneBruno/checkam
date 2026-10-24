@@ -31,3 +31,9 @@ inspect_duplicates.py
 # Pytest cache
 .pytest_cache/
 
+
+# Backups, SQLite journals, NAPAMS screenshots
+*.backup
+data/*.sqlite3-shm
+data/*.sqlite3-wal
+backend/napams_screenshots/
