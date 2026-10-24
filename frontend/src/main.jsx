@@ -16,3 +16,13 @@ createRoot(document.getElementById('root')).render(
     {page}
   </StrictMode>,
 )
+
+// Fade out the Check Am splash once the app has drawn (shown for at least 600ms so it doesn't flash)
+const splash = document.getElementById('splash')
+if (splash) {
+  const wait = Math.max(0, 600 - performance.now())
+  window.setTimeout(() => {
+    splash.classList.add('hide')
+    window.setTimeout(() => splash.remove(), 400)
+  }, wait)
+}

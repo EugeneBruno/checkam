@@ -21,7 +21,13 @@ function MediaUploader({
   return (
     <>
       <div className="capture-options">
-        <button type="button" className="capture-option" onClick={() => photoInputRef.current?.click()}>
+        <button type="button" className="capture-option" onClick={() => {
+          // Phones/tablets open the native camera; on a laptop that input only opens a file picker,
+          // so open the live camera instead and use its "Take photo" button.
+          const touch = navigator.maxTouchPoints > 0 && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)
+          if (touch) photoInputRef.current?.click()
+          else if (!isCameraOpen) onCameraToggle()
+        }}>
           <span className="option-icon photo-icon"><span aria-hidden="true">▧</span></span>
           <span><strong>Take a photo</strong><small>Open your device camera</small></span>
           <span className="icon option-arrow" aria-hidden="true">↗</span>
@@ -33,7 +39,7 @@ function MediaUploader({
         </button>
         <button type="button" className="capture-option" onClick={onCameraToggle} disabled={recording}>
           <span className="option-icon stream-icon"><span aria-hidden="true">{isCameraOpen ? '■' : '◉'}</span></span>
-          <span><strong>{isCameraOpen ? 'Close live camera' : 'Open live camera'}</strong><small>Record a 5–15 second clip</small></span>
+          <span><strong>{isCameraOpen ? 'Close live camera' : 'Open live camera'}</strong><small>Take photos or record a 5–15 sec clip</small></span>
           <span className="icon option-arrow" aria-hidden="true">↗</span>
         </button>
       </div>

@@ -144,7 +144,14 @@ def _parse(text):
     match = re.search(r"\{.*\}", text, re.S)
     if not match:
         raise ValueError("Research step did not return JSON")
-    value = json.loads(match.group(0))
+    candidate = match.group(0)
+    try:
+        value = json.loads(candidate)
+    except json.JSONDecodeError:
+        # common model slips: trailing commas, and a missing comma between two lines of the object
+        repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
+        repaired = re.sub(r'("|\d|true|false|null|\]|\})(\s*\n\s*)(")', r"\1,\2\3", repaired)
+        value = json.loads(repaired)
     if not isinstance(value, dict):
         raise ValueError("Research step did not return a JSON object")
     return value
@@ -397,15 +404,20 @@ def _client():
     )
 
 
+_LAST_CALL = {}
+
+
 def _generate(client, contents, config, step=None, models=None):
     """Ask the first model that answers; try fallbacks on busy/quota/timeout errors."""
     last_error = None
+    _LAST_CALL.update(contents=contents, config=config)
     for model in models or _models():
         try:
             response = client.models.generate_content(
                 model=model, contents=contents, config=config
             )
             print(f"[research] {model} answered")
+            _LAST_CALL["model"] = model
             return response
         except Exception as exc:
             if not any(code in str(exc) for code in BUSY):
@@ -611,7 +623,20 @@ def research(product, progress=None):
         sources, grounded = [], False
         tavily_mode = False
 
-    ref = _parse(response.text)
+    try:
+        ref = _parse(response.text)
+    except (ValueError, json.JSONDecodeError):
+        # The AI sometimes returns broken JSON. Ask once more, starting with a different model.
+        step("The AI's reply was not valid JSON; asking again")
+        others = [m for m in _models() if m != _LAST_CALL.get("model")] or _models()
+        response = _generate(
+            client,
+            _LAST_CALL["contents"] + "\n\nReply again with ONE valid JSON object only (commas between keys, no comments).",
+            _LAST_CALL["config"],
+            step,
+            models=others,
+        )
+        ref = _parse(response.text)
     ref.setdefault("found", False)
     ref.setdefault("nafdac_no", None)
 

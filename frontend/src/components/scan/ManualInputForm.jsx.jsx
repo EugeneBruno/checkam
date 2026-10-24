@@ -9,18 +9,20 @@ const fields = [
   { name: 'batchNumber', label: 'Batch / lot number', placeholder: 'If available' },
   { name: 'manufactureDate', label: 'Manufacture date', type: 'text', placeholder: 'e.g. 03/2025' },
   { name: 'expiryDate', label: 'Expiry date', type: 'text', placeholder: 'e.g. 03/2027' },
+  { name: 'imei', label: 'IMEI on the box', placeholder: 'Phones: 15 digits on the box sticker', inputMode: 'numeric' },
+  { name: 'imeiDevice', label: 'IMEI on the phone', placeholder: 'Dial *#06# and type what it shows', inputMode: 'numeric' },
   { name: 'price', label: 'Listed price', placeholder: 'Optional price and currency', inputMode: 'decimal' },
   { name: 'seller', label: 'Seller / shop', placeholder: 'Optional seller name' },
 ]
 
-function ManualInputForm({ values, onChange }) {
+function ManualInputForm({ values, onChange, open = false }) {
   function updateField(event) {
     const { name, value } = event.target
     onChange({ ...values, [name]: value })
   }
 
   return (
-    <details className="manual-input-panel">
+    <details className="manual-input-panel" open={open || undefined}>
       <summary>
         <span className="manual-summary-icon" aria-hidden="true">≡</span>
         <span className="manual-summary-copy">

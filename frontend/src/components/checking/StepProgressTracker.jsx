@@ -9,8 +9,8 @@ function StepProgressTracker({ steps, activeIndex, status }) {
     <section className="telemetry-card progress-card" aria-labelledby="progress-heading">
       <div className="telemetry-heading">
         <div>
-          <p className="telemetry-kicker">RESEARCH PIPELINE</p>
-          <h2 id="progress-heading">Run progress</h2>
+          <p className="telemetry-kicker">STEPS</p>
+          <h2 id="progress-heading">Progress</h2>
         </div>
         <span className="progress-count">{Math.min(activeIndex + 1, steps.length)} <i>/</i> {steps.length}</span>
       </div>

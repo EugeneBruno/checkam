@@ -193,4 +193,17 @@ def identify(images: list) -> dict:
     """images: list of raw image bytes (photos or extracted video frames, max ~10)."""
     if not images:
         return {}
-    return _ask(images[:10], PROMPT)
+    product = _ask(images[:10], PROMPT)
+    ids = product.get("identifiers") or {}
+    if ids.get("nafdac_no"):
+        ids["nafdac_no"] = clean_nafdac_no(ids["nafdac_no"])
+    return product
+
+
+def clean_nafdac_no(raw):
+    """'NAFDAC REG NO: 01-0107' / 'NO-01-0107' -> '01-0107' (keep the number exactly as printed)."""
+    text = str(raw).strip()
+    text = re.sub(r"(?i)^\s*(nafdac|reg(istration)?|no\.?|number|nrn)[\s.:#-]*", "", text)
+    text = re.sub(r"(?i)^\s*(reg(istration)?|no\.?|number)[\s.:#-]*", "", text)
+    text = re.sub(r"(?i)^\s*(no\.?)[\s.:#-]*", "", text)
+    return text.strip(" :-") or str(raw).strip()

@@ -33,9 +33,9 @@ function Icon({ children, className = '' }) {
   return <span className={`icon ${className}`} aria-hidden="true">{children}</span>
 }
 
-function ScanPage({ isActive = true, onBack, onStartResearch }) {
+function ScanPage({ isActive = true, onBack, onStartResearch, initialProduct = null }) {
   const [attachments, setAttachments] = useState([])
-  const [productDetails, setProductDetails] = useState({})
+  const [productDetails, setProductDetails] = useState(initialProduct || {})
   const [stream, setStream] = useState(null)
   const [recording, setRecording] = useState(false)
   const [cameraError, setCameraError] = useState('')
@@ -109,6 +109,8 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
     })
     setAttachments((current) => [...current, ...newAttachments])
     setPrepared(false)
+    // Check Am reads photos, so pull a few frames out of each video straight away
+    newAttachments.filter((item) => item.file.type.startsWith('video/')).forEach((item) => sampleVideo(item))
   }
 
   function removeAttachment(id) {
@@ -129,8 +131,8 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
 
     try {
       const cameraStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       })
       setStream(cameraStream)
     } catch (error) {
@@ -214,11 +216,13 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
 
   function prepareIntake(event) {
     event.preventDefault()
-    if (recording) {
-      setCameraError('Finish recording your video before preparing the intake.')
+    const hasPhoto = attachments.some(({ file }) => file.type.startsWith('image/'))
+    const hasDetails = Object.values(productDetails).some((value) => String(value || '').trim())
+    if (!hasPhoto && !hasDetails) {
+      setCameraError('Add a photo of the product, or type at least one detail (name, NAFDAC number, barcode or IMEI).')
       return
     }
-    setPrepared(true)
+    startResearch()
   }
 
   function downloadManifest() {
@@ -227,12 +231,12 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
       product: productDetails,
       situation: {
         intent: situationIntent,
-        summary: summaryRef.current.value.trim(),
-        location: locationRef.current.value.trim(),
+        summary: (summaryRef.current?.value || "").trim(),
+        location: (locationRef.current?.value || "").trim(),
         urgency,
-        peopleInvolved: peopleRef.current.value.trim(),
+        peopleInvolved: (peopleRef.current?.value || "").trim(),
         safeToApproach,
-        additionalDetails: detailsRef.current.value.trim(),
+        additionalDetails: (detailsRef.current?.value || "").trim(),
       },
       attachments: attachments.map(({ file, source }) => ({
         name: file.name,
@@ -259,12 +263,12 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
       product: productDetails,
       situation: {
         intent: situationIntent,
-        summary: summaryRef.current.value.trim(),
-        location: locationRef.current.value.trim(),
+        summary: (summaryRef.current?.value || "").trim(),
+        location: (locationRef.current?.value || "").trim(),
         urgency,
-        peopleInvolved: peopleRef.current.value.trim(),
+        peopleInvolved: (peopleRef.current?.value || "").trim(),
         safeToApproach,
-        additionalDetails: detailsRef.current.value.trim(),
+        additionalDetails: (detailsRef.current?.value || "").trim(),
       },
       attachments: attachments.map(({ file, source }) => ({
         name: file.name,
@@ -272,6 +276,8 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
         sizeBytes: file.size,
         source,
       })),
+      // the real files: App keeps them in memory and CheckingPage sends them to Check Am
+      files: attachments.map(({ file }) => file).filter((file) => file.type.startsWith('image/')),
     })
   }
 
@@ -290,25 +296,25 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
            className="absolute left-0 -top-4 h-auto w-40 max-w-none"
           />
         </a>
-        <div className="topbar-status ml-16" ><span className="status-dot" /> Secure intake workspace</div>
-        <span className="privacy-note"><Icon>◈</Icon> Your media stays in this browser</span>
+        <div className="topbar-status ml-16" ><span className="status-dot" /> New check</div>
+        <span className="privacy-note"><Icon>◈</Icon> Photos are only sent when you press Check</span>
       </header>
 
       <div className="page">
         <div className="page-heading">
           <div>
-            <div className="eyebrow"><span>01</span> NEW FIELD INTAKE</div>
-            <h1>Bring the situation<br />into <span>focus.</span></h1>
-            <p className="intro">Capture what you see, add the context, and prepare a clear handoff.</p>
+            <div className="eyebrow"><span>01</span> NEW CHECK</div>
+            <h1>Check a <span>product.</span></h1>
+            <p className="intro">Photograph the front, the NAFDAC number, the batch and expiry, and the barcode. Or type what you can read.</p>
           </div>
-          <div className="step-pill"><span className="step-active">1</span> Capture <i /> <span>2</span> Review</div>
+          <div className="step-pill"><span className="step-active">1</span> Photos <i /> <span>2</span> Result</div>
         </div>
 
         <form className="intake-grid" onSubmit={prepareIntake}>
           <section className="panel capture-panel" aria-labelledby="capture-heading">
             <div className="panel-heading">
               <div className="section-index">A</div>
-              <div><h2 id="capture-heading">Capture the scene</h2><p>Photos, video, or a quick frame—use what helps explain it.</p></div>
+              <div><h2 id="capture-heading">Photos of the product</h2><p>Front, NAFDAC number, batch and expiry, barcode. More photos help.</p></div>
             </div>
 
             <div className={`camera-view ${stream ? 'camera-live' : ''}`}>
@@ -326,8 +332,8 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
                 </>
                 : <div className="camera-placeholder">
                   <div className="camera-orbit"><Icon>◉</Icon></div>
-                  <strong>See something worth sharing?</strong>
-                  <span>Start your camera or add media from your device.</span>
+                  <strong>Photograph the pack</strong>
+                  <span>Use your camera or upload photos. Phones: hold steady and fill the frame with the label.</span>
                 </div>}
             </div>
             {cameraError && <p className="inline-error" role="alert">{cameraError}</p>}
@@ -341,7 +347,9 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
               recording={recording}
               samplingId={samplingId}
             />
+            {initialProduct && <p className="manual-input-note"><strong>Checking {(initialProduct.productName && initialProduct.brand && initialProduct.productName.toLowerCase().startsWith(initialProduct.brand.toLowerCase()) ? initialProduct.productName : [initialProduct.brand, initialProduct.productName].filter(Boolean).join(' ')) || 'the same product'} again.</strong> Add the photo the result asked for; your earlier details are filled in below.</p>}
             <ManualInputForm
+              open={Boolean(initialProduct)}
               values={productDetails}
               onChange={(nextValues) => {
                 setProductDetails(nextValues)
@@ -353,7 +361,7 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
           <section className="panel context-panel" aria-labelledby="context-heading">
             <div className="panel-heading">
               <div className="section-index">B</div>
-              <div><h2 id="context-heading">Frame the situation</h2><p>A little context helps others understand what matters.</p></div>
+              <div><h2 id="context-heading">About this check</h2><p>This shapes the advice you get.</p></div>
             </div>
 
             <SituationToggle
@@ -364,48 +372,15 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
               }}
             />
 
-            <label className="field-label" htmlFor="situation-summary">What’s happening? <span>Required</span></label>
-            <textarea ref={summaryRef} id="situation-summary" required rows="3" maxLength="600" placeholder="Describe what you observed, in your own words…" onChange={() => setPrepared(false)} />
-            <div className="field-row">
-              <div className="field">
-                <label className="field-label" htmlFor="location">Where is it?</label>
-                <input ref={locationRef} id="location" type="text" maxLength="160" placeholder="Address, landmark, or area" onChange={() => setPrepared(false)} />
-              </div>
-              <div className="field">
-                <label className="field-label" htmlFor="people-involved">People involved</label>
-                <input ref={peopleRef} id="people-involved" type="text" maxLength="160" placeholder="Optional" onChange={() => setPrepared(false)} />
-              </div>
+            <label className="field-label" htmlFor="situation-summary">Notes <span>Optional</span></label>
+            <textarea ref={summaryRef} id="situation-summary" rows="3" maxLength="600" placeholder="Anything that looked wrong: price, seal, print, seller…" onChange={() => setPrepared(false)} />
+            <div className="field">
+              <label className="field-label" htmlFor="location">Where did you see it? <span>Optional</span></label>
+              <input ref={locationRef} id="location" type="text" maxLength="160" placeholder="Market, shop or state, e.g. Idumota, Lagos" onChange={() => setPrepared(false)} />
             </div>
 
-            <fieldset className="urgency-field">
-              <legend className="field-label">How time-sensitive is this?</legend>
-              <div className="urgency-options">
-                {[
-                  ['routine', 'Routine'],
-                  ['soon', 'Needs attention'],
-                  ['urgent', 'Urgent'],
-                ].map(([value, label]) => (
-                  <button type="button" key={value} className={`urgency-choice ${urgency === value ? 'selected' : ''}`} aria-pressed={urgency === value} onClick={() => { setUrgency(value); setPrepared(false) }}>
-                    {value === 'urgent' && <span className="urgent-dot" />}{label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset className="safety-field">
-              <legend className="field-label">Is it safe to approach?</legend>
-              <div className="safety-options">
-                {['Yes', 'No', 'Not sure'].map((choice) => (
-                  <button type="button" key={choice} className={`safety-choice ${safeToApproach === choice ? 'selected' : ''}`} aria-pressed={safeToApproach === choice} onClick={() => { setSafeToApproach(choice); setPrepared(false) }}>{choice}</button>
-                ))}
-              </div>
-            </fieldset>
-
-            <label className="field-label" htmlFor="additional-details">Anything else to know? <span>Optional</span></label>
-            <textarea ref={detailsRef} id="additional-details" rows="3" maxLength="1200" placeholder="Useful details, changes over time, or what support is needed…" onChange={() => setPrepared(false)} />
-
-            <div className="privacy-card"><Icon>◈</Icon><p><strong>Private by design</strong><br />Your media and details are only held in this page until you leave. No upload service is connected.</p></div>
-            <button type="submit" className="button button-primary">Prepare intake <span>→</span></button>
+            <div className="privacy-card"><Icon>◈</Icon><p><strong>What happens next</strong><br />Your photos and details are sent to Check Am, which reads the pack and checks it against NAFDAC, SON and NCC data, alerts and other buyers’ scans. Videos are turned into a few photos automatically.</p></div>
+            <button type="submit" className="button button-primary">Check this product <span>→</span></button>
 
             {prepared && <div className="prepared-card" role="status">
               <strong>Intake ready to review</strong>
@@ -418,7 +393,7 @@ function ScanPage({ isActive = true, onBack, onStartResearch }) {
           </section>
         </form>
 
-        <footer className="page-footer"><span>CheckAm FIELD INTAKE</span><span>Take care. Share only what’s safe to share.</span></footer>
+        <footer className="page-footer"><span>Check Am</span><span>Evidence, not a guarantee.</span></footer>
       </div>
     </main>
   )

@@ -1,134 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AgentThoughtLog from '../components/checking/AgentThoughtLog.jsx'
-import SimulatedTelemetry from '../components/checking/SimulatedTelemetry.jsx'
 import StepProgressTracker from '../components/checking/StepProgressTracker.jsx'
 import checkAmLogo from '../public/Check_Am_Logo-removebg-preview.png'
+import { API_URL, takePendingFiles, verify } from '../api.js'
+import BrandLoader from '../components/brand/BrandLoader.jsx'
 
-const demoSteps = [
-  {
-    id: 'category',
-    label: 'Identify product category & packaging',
-    description: 'Classify the supplied product details.',
-    title: 'Identifying product category & packaging...',
-    detail: 'Demo classification step; no autonomous vision model is connected.',
-  },
-  {
-    id: 'markings',
-    label: 'Extract regulatory markings',
-    description: 'Inspect the NAFDAC / SON fields provided.',
-    title: 'Extracting NAFDAC / SON regulatory markings via OCR...',
-    detail: 'OCR activity is simulated from supplied intake fields; no image processing runs.',
-  },
-  {
-    id: 'registry',
-    label: 'Query registry gazette & approvals',
-    description: 'Prepare a registry comparison.',
-    title: 'Querying verified registry gazette & active approvals...',
-    detail: 'Registry lookup is simulated; no public records or live approvals are queried.',
-  },
-  {
-    id: 'geography',
-    label: 'Cross-reference geographical scan ledger',
-    description: 'Check for a sample duplicate-location signal.',
-    title: 'Cross-referencing geographical scan ledger for clone anomalies...',
-    detail: 'Geographical anomaly check uses only scripted demo signals; no location ledger is connected.',
-  },
-  {
-    id: 'visual-analysis',
-    label: 'Synthesize visual logo & typography signals',
-    description: 'Prepare a final review summary.',
-    title: 'Synthesizing visual logo & typography discrepancy analysis...',
-    detail: 'Visual discrepancy analysis is simulated; submitted images are not analyzed.',
-  },
+// What the Check Am backend does for every scan, in order (see backend/pipeline.py)
+const PIPELINE = [
+  { id: 'send', label: 'Send photos and details', description: 'Upload to the Check Am server.' },
+  { id: 'read', label: 'Read the pack', description: 'AI vision reads brand, NAFDAC number, batch, expiry, barcode, IMEI, SON marks.' },
+  { id: 'route', label: 'Look in our local data', description: 'NAFDAC Greenbook copy, NAPAMS confirmations, SON list, NCC results, saved research.' },
+  { id: 'checks', label: 'Run the checks', description: 'Registry fit, alerts, batch clones, barcode, dates, buyer reports, IMEI, SON.' },
+  { id: 'research', label: 'Research online if needed', description: 'Only when the product is not in our data: NAFDAC online Greenbook, then the web.' },
+  { id: 'verdict', label: 'Score the evidence', description: 'Fixed rules turn the evidence into a verdict and a next step.' },
 ]
 
-const demoChecks = [
-  { id: 'summary', name: 'Situation summary present' },
-  { id: 'context', name: 'Context fields represented' },
-  { id: 'media', name: 'Attachment metadata indexed' },
-  { id: 'safety', name: 'Safety framing included' },
-  { id: 'transmission', name: 'No external transmission' },
-]
+// While we wait for the single /verify response, move through the steps the server is working on
+const WAIT_SCHEDULE = [[0, 0], [1.2, 1], [4, 2], [5, 3], [8, 4]]
 
-function evaluateChecks(intake) {
-  const { situation, attachments } = intake
-  const product = intake.product || {}
-  const summary = situation.summary.trim()
-  const metadataComplete = attachments.every((attachment) =>
-    Boolean(attachment.name && attachment.type && Number.isFinite(attachment.sizeBytes)),
-  )
-  const contextComplete = Boolean(situation.location && situation.safeToApproach)
-  const suppliedProductDetails = Object.values(product).filter((value) => typeof value === 'string' && value.trim()).length
-  const purchaseStage = situation.intent || 'BEFORE_BUYING'
-
-  const intakeChecks = [
-    {
-      ...demoChecks[0],
-      status: summary.length >= 20 ? 'passed' : 'warning',
-      detail: summary.length >= 20
-        ? 'A descriptive situation summary was supplied.'
-        : 'The summary is brief; consider adding observable details.',
-    },
-    {
-      ...demoChecks[1],
-      status: contextComplete ? 'passed' : 'warning',
-      detail: contextComplete
-        ? 'Location and approach-safety context are present.'
-        : `Missing ${[
-          !situation.location && 'location',
-          !situation.safeToApproach && 'approach-safety context',
-        ].filter(Boolean).join(' and ')}; these fields are optional but may help review.`,
-    },
-    {
-      ...demoChecks[2],
-      status: metadataComplete ? 'passed' : 'failed',
-      detail: attachments.length === 0
-        ? 'No attachments were submitted; there is no media metadata to index.'
-        : metadataComplete
-          ? `${attachments.length} attachment${attachments.length === 1 ? '' : 's'} have names, types, and sizes.`
-          : 'One or more attachments are missing required metadata.',
-    },
-    {
-      id: 'manual-product-details',
-      name: 'Manual product details captured',
-      status: suppliedProductDetails > 0 ? 'passed' : 'warning',
-      detail: suppliedProductDetails > 0
-        ? `${suppliedProductDetails} product detail field${suppliedProductDetails === 1 ? '' : 's'} supplied by the user; not independently verified.`
-        : 'No manual product details supplied. Details may be entered when labels are unreadable.',
-    },
-    {
-      ...demoChecks[3],
-      status: situation.safeToApproach ? 'passed' : 'warning',
-      detail: situation.safeToApproach
-        ? `Approach-safety response recorded: ${situation.safeToApproach}.`
-        : 'No approach-safety response was provided.',
-    },
-    {
-      ...demoChecks[4],
-      status: 'passed',
-      detail: 'This local demo does not upload media or contact external research services.',
-    },
-    {
-      id: 'situational-guidance',
-      name: 'Guidance matched to purchase stage',
-      status: 'passed',
-      detail: purchaseStage === 'ALREADY_BOUGHT'
-        ? 'Post-purchase mode: if authenticity or safety is uncertain, quarantine the item and do not consume it until verified.'
-        : 'Pre-purchase mode: if evidence is suspicious or insufficient, do not buy until the product is independently verified.',
-    },
-  ]
-
-  return [...intakeChecks, ...(intake.preset?.checks || [])]
+export const CHECK_NAMES = {
+  registry_fit: 'NAFDAC registry match',
+  nafdac_alerts: 'NAFDAC counterfeit alerts',
+  clone_detection: 'Batch & serial clone check',
+  prior_reports: 'Other buyers’ reports',
+  barcode_check_digit: 'Barcode check digit',
+  barcode_owner: 'Barcode belongs to this brand',
+  date_sanity: 'Expiry & manufacture dates',
+  son_certification: 'SON certification',
+  imei_check: 'IMEI (box vs phone)',
+  ncc_device_check: 'NCC device check',
+  packaging_quality: 'Packaging & print quality',
+  reference_match: 'Online research',
 }
 
-function initialTrace() {
-  return [{
-    id: 'demo-start',
-    kind: 'trace',
-    title: 'Verification sequence initialized',
-    detail: 'Simulated terminal trace; no public records, images, or geographic ledgers are queried.',
-    time: '00:00',
-  }]
+export function checkName(id) {
+  return CHECK_NAMES[id] || String(id || 'check').replace(/_/g, ' ')
+}
+
+export function toCheck(evidence, index) {
+  const status = evidence.result === 'pass' ? 'passed' : evidence.result === 'fail' ? 'failed' : 'unknown'
+  return {
+    id: `${evidence.check}-${index}`,
+    name: checkName(evidence.check),
+    detail: evidence.detail || '',
+    source: evidence.source || null,
+    status,
+  }
 }
 
 function elapsedLabel(seconds) {
@@ -138,7 +55,17 @@ function elapsedLabel(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(wholeSeconds).padStart(2, '0')}.${tenths}`
 }
 
-function VerificationPanel({ checks, live }) {
+function statusIcon(status) {
+  return status === 'passed' ? '✓' : status === 'failed' || status === 'warning' ? '!' : status === 'unknown' ? '?' : '·'
+}
+
+function statusLabel(status) {
+  return status === 'passed' ? 'OK' : status === 'failed' || status === 'warning' ? 'PROBLEM' : status === 'unknown' ? 'NOT CONFIRMED' : 'RUNNING'
+}
+
+export function statusWord(status) { return statusLabel(status) }
+
+export function VerificationPanel({ checks, live }) {
   const passed = checks.filter((check) => check.status === 'passed').length
   const flagged = checks.filter((check) => check.status === 'failed' || check.status === 'warning').length
 
@@ -146,86 +73,136 @@ function VerificationPanel({ checks, live }) {
     <section className="telemetry-card verification-card" aria-labelledby="verification-heading">
       <div className="telemetry-heading">
         <div>
-          <p className="telemetry-kicker">QUALITY GATES</p>
-          <h2 id="verification-heading">Heuristic verification</h2>
+          <p className="telemetry-kicker">EVIDENCE</p>
+          <h2 id="verification-heading">What was checked</h2>
         </div>
         <span className={`verification-summary ${flagged ? 'verification-alert' : ''}`}>
           {passed} passed{flagged ? ` · ${flagged} flagged` : ''}
         </span>
       </div>
-      <p className="verification-caption">Rule-based signals for review—not a truth or safety guarantee.</p>
+      <p className="verification-caption">Each line is one check with its source. “Not confirmed” means we couldn’t check it either way: it is not a problem by itself.</p>
       {checks.length === 0
-        ? <div className="verification-empty">Checks will appear as the run progresses.</div>
+        ? <div className="verification-empty">Checks appear here when Check Am answers.</div>
         : <ul className="verification-list" aria-live="polite">
           {checks.map((check) => (
             <li key={check.id} className={`verification-item verification-${check.status}`}>
-              <span className="verification-icon">{check.status === 'passed' ? '✓' : check.status === 'failed' || check.status === 'warning' ? '!' : '·'}</span>
+              <span className="verification-icon">{statusIcon(check.status)}</span>
               <div className="verification-copy">
                 <strong>{check.name}</strong>
                 <small>{check.detail}</small>
+                {check.source && (/^https?:\/\//.test(check.source)
+                  ? <small><a href={check.source} target="_blank" rel="noreferrer">Source ↗</a></small>
+                  : <small>Source: {check.source}</small>)}
               </div>
-              <span className="verification-status">{check.status === 'passed' ? 'PASS' : check.status === 'failed' || check.status === 'warning' ? 'FLAG' : 'RUNNING'}</span>
+              <span className="verification-status">{statusLabel(check.status)}</span>
             </li>
           ))}
         </ul>}
-      {live && <p className="verification-live-note">Results are provided by the connected agent; verify them independently.</p>}
+      {live && <p className="verification-live-note">Evidence from Check Am. A registry match shows the number belongs to this product; it can’t prove what’s inside the pack.</p>}
     </section>
   )
 }
 
 function CheckingPage({ intake, scanId, onBack, onComplete }) {
-  const [source, setSource] = useState('demo')
   const [runStatus, setRunStatus] = useState('running')
-  const [activeIndex, setActiveIndex] = useState(-1)
-  const [events, setEvents] = useState(initialTrace)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [events, setEvents] = useState([])
   const [checks, setChecks] = useState([])
   const [elapsed, setElapsed] = useState(0)
-  const elapsedRef = useRef(0)
+  const [attempt, setAttempt] = useState(0)
+  const startRef = useRef(0)
+  const filesRef = useRef(null)
   const completedRef = useRef(false)
+  const requestRef = useRef(null)
 
-  const completeRun = useCallback((finalChecks) => {
-    if (completedRef.current) return
-    completedRef.current = true
-    setChecks(finalChecks)
-    setRunStatus('completed')
-    onComplete({ scanId, intake, checks: finalChecks })
-  }, [intake, onComplete, scanId])
+  if (filesRef.current === null) filesRef.current = takePendingFiles(scanId)
+  const files = filesRef.current
+
+  const addEvent = useCallback((title, detail, status = '') => {
+    const seconds = (Date.now() - startRef.current) / 1000
+    setEvents((current) => [...current, {
+      id: `ev-${current.length}-${Date.now()}`,
+      kind: status === 'done' ? 'verification' : 'trace',
+      title,
+      detail,
+      time: elapsedLabel(seconds),
+      status,
+    }].slice(-100))
+  }, [])
 
   useEffect(() => {
-    elapsedRef.current = elapsed
-  }, [elapsed])
+    let cancelled = false
+    const timers = []
+    completedRef.current = false
+    startRef.current = Date.now()
+    setRunStatus('running')
+    setActiveIndex(0)
+    setEvents([])
+    setChecks([])
+    setElapsed(0)
 
-  useEffect(() => {
-    if (source !== 'demo' || runStatus !== 'running') return undefined
+    const typed = Object.values(intake.product || {}).filter((value) => String(value || '').trim()).length
+    if (!files.length && !typed) {
+      addEvent('Nothing to check', 'Go back and add a photo of the product or type at least one detail. (Photos are not kept if the page reloads.)', 'failed')
+      setRunStatus('failed')
+      return undefined
+    }
 
-    const timer = window.setTimeout(() => {
-      const nextIndex = activeIndex + 1
-      const step = demoSteps[nextIndex]
-      if (!step) {
-        setRunStatus('completed')
-        return
+    addEvent('Sending to Check Am', `${files.length} photo${files.length === 1 ? '' : 's'} and ${typed} typed detail${typed === 1 ? '' : 's'} → ${API_URL}`)
+    WAIT_SCHEDULE.slice(1).forEach(([seconds, index]) => {
+      timers.push(window.setTimeout(() => {
+        if (cancelled || completedRef.current) return
+        setActiveIndex(index)
+        addEvent(PIPELINE[index].label, PIPELINE[index].description, 'waiting')
+      }, seconds * 1000))
+    })
+
+    // one request per attempt, even when React (StrictMode) runs this effect twice
+    if (requestRef.current?.attempt !== attempt) {
+      requestRef.current = {
+        attempt,
+        promise: verify({
+          files,
+          product: intake.product,
+          situation: intake.situation?.intent,
+          location: intake.situation?.location,
+        }),
       }
-
-      const nextElapsed = (nextIndex + 1) * 0.45
-      setActiveIndex(nextIndex)
-      setElapsed(Math.floor(nextElapsed))
-      setEvents((current) => [...current, {
-        id: `demo-${step.id}`,
-        kind: 'trace',
-        title: step.title,
-        detail: step.detail,
-        time: elapsedLabel(nextElapsed),
-      }])
-      const allChecks = evaluateChecks(intake)
-      if (nextIndex === demoSteps.length - 1) {
-        completeRun(allChecks)
-      } else {
-        setChecks(allChecks.slice(0, Math.min(allChecks.length, nextIndex + 1)))
+    }
+    requestRef.current.promise.then((response) => {
+      if (cancelled) return
+      completedRef.current = true
+      timers.forEach(window.clearTimeout)
+      const p = response.product || {}
+      addEvent('Pack read', [p.brand, p.name, p.variant].filter(Boolean).join(' · ') || p.looks_like || 'Product could not be named from the photos', 'done')
+      if (response.route) {
+        addEvent(response.route.covered_locally ? 'Found in our local data' : 'Not fully covered by our local data',
+          `${response.route.reason || ''} → ${response.route.path || ''}`, 'done')
       }
-    }, 450)
+      for (const st of response.research?.steps || []) addEvent('Research', st, 'done')
+      const finalChecks = (response.evidence || []).map(toCheck)
+      setChecks(finalChecks)
+      addEvent('Verdict', `${String(response.verdict || '').replace(/_/g, ' ')} · trust score ${response.trust_score ?? '–'}`, 'done')
+      setActiveIndex(PIPELINE.length - 1)
+      setRunStatus('completed')
+      window.setTimeout(() => onComplete({ scanId, intake, checks: finalChecks, response }), 1200)
+    }).catch((error) => {
+      if (cancelled) return
+      completedRef.current = true
+      timers.forEach(window.clearTimeout)
+      const offline = /Failed to fetch|NetworkError|Load failed/i.test(error.message)
+      addEvent('Check failed', offline
+        ? `Can't reach the Check Am server at ${API_URL}. Is uvicorn running?`
+        : error.message, 'failed')
+      setRunStatus('failed')
+    })
 
-    return () => window.clearTimeout(timer)
-  }, [activeIndex, completeRun, intake, runStatus, source])
+    return () => {
+      cancelled = true
+      timers.forEach(window.clearTimeout)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt])
 
   useEffect(() => {
     if (runStatus !== 'running') return undefined
@@ -233,77 +210,9 @@ function CheckingPage({ intake, scanId, onBack, onComplete }) {
     return () => window.clearInterval(timer)
   }, [runStatus])
 
-  useEffect(() => {
-    function handleAgentEvent(event) {
-      const detail = event.detail
-      if (!detail || typeof detail !== 'object') return
-
-      if (detail.type === 'trace' && typeof detail.title === 'string' && typeof detail.detail === 'string') {
-        setSource('live')
-        setEvents((current) => [...current, {
-          id: typeof detail.id === 'string' ? detail.id : `live-${Date.now()}-${current.length}`,
-          kind: 'trace',
-          title: detail.title.slice(0, 160),
-          detail: detail.detail.slice(0, 1200),
-          time: typeof detail.time === 'string' ? detail.time.slice(0, 32) : elapsedLabel(elapsedRef.current),
-          status: typeof detail.status === 'string' ? detail.status.slice(0, 32) : '',
-        }].slice(-100))
-        if (detail.status === 'failed') setRunStatus('failed')
-        else if (detail.status === 'completed') completeRun(evaluateChecks(intake))
-        else setRunStatus('running')
-      } else if (detail.type === 'verification' && typeof detail.name === 'string') {
-        setSource('live')
-        const status = ['passed', 'failed', 'warning', 'running'].includes(detail.status) ? detail.status : 'running'
-        setChecks((current) => {
-          const next = {
-            id: typeof detail.id === 'string' ? detail.id : detail.name.slice(0, 160),
-            name: detail.name.slice(0, 160),
-            detail: typeof detail.detail === 'string' ? detail.detail.slice(0, 1200) : '',
-            status,
-          }
-          const existing = current.findIndex((check) => check.id === next.id)
-          if (existing < 0) return [...current, next].slice(-50)
-          return current.map((check, index) => index === existing ? next : check)
-        })
-      } else if (detail.type === 'status' && ['running', 'paused', 'completed', 'failed'].includes(detail.status)) {
-        setSource('live')
-        if (detail.status === 'completed') completeRun(evaluateChecks(intake))
-        else setRunStatus(detail.status)
-      }
-    }
-
-    window.addEventListener('checkam:agent-event', handleAgentEvent)
-    return () => window.removeEventListener('checkam:agent-event', handleAgentEvent)
-  }, [completeRun, intake])
-
-  function restartDemo() {
-    setSource('demo')
-    setRunStatus('running')
-    completedRef.current = false
-    setActiveIndex(-1)
-    setEvents(initialTrace())
-    setChecks([])
-    setElapsed(0)
-  }
-
-  const running = runStatus === 'running'
-  const statusLabel = runStatus === 'completed' ? 'Run complete' : runStatus === 'failed' ? 'Run failed' : runStatus === 'paused' ? 'Paused' : 'Agent active'
-  const urgency = intake.situation.urgency === 'urgent' ? 'Urgent' : intake.situation.urgency === 'soon' ? 'Needs attention' : 'Routine'
+  const statusText = runStatus === 'completed' ? 'Check complete' : runStatus === 'failed' ? 'Check failed' : 'Checking…'
   const purchaseStage = intake.situation.intent || 'BEFORE_BUYING'
   const purchaseStageLabel = purchaseStage === 'ALREADY_BOUGHT' ? 'Already bought' : 'Before buying'
-  const recommendation = purchaseStage === 'ALREADY_BOUGHT'
-    ? 'If this item may be unsafe or counterfeit, quarantine it and do not consume it until verified.'
-    : 'If evidence is suspicious or incomplete, do not buy until you can verify the product.'
-  const displayedSteps = source === 'live'
-    ? events.filter((event) => event.kind === 'trace').map((event) => ({
-      id: event.id,
-      label: event.title,
-      description: event.detail,
-    }))
-    : demoSteps
-  const displayedStepIndex = source === 'live'
-    ? Math.max(0, displayedSteps.length - 1)
-    : activeIndex
 
   return (
     <main className="app-shell checking-shell">
@@ -315,84 +224,55 @@ function CheckingPage({ intake, scanId, onBack, onComplete }) {
         className="absolute left-0 -top-7 h-auto w-40 max-w-none"
           />
         </a>
-        <div className="topbar-status"><span className="status-dot" /> Research workspace</div>
-        <button className="back-to-intake" type="button" onClick={onBack}>← Back to intake</button>
+        <div className="topbar-status"><span className="status-dot" /> Checking · {elapsed}s</div>
+        <button className="back-to-intake" type="button" onClick={onBack}>← Back</button>
       </header>
 
       <div className="page checking-page">
-        <div className="checking-breadcrumb"><span>FIELD INTAKE</span><i>/</i><strong>RESEARCH TRACE</strong></div>
+        <div className="checking-breadcrumb"><span>NEW CHECK</span><i>/</i><strong>CHECKING</strong></div>
         <div className="checking-title-row">
           <div>
-            <div className="eyebrow"><span>02</span> EXECUTION MONITOR</div>
-            <h1>Research <span>in motion.</span></h1>
-            <p className="intro">Follow the run, inspect its activity, and review heuristic checks as they arrive.</p>
+            <div className="eyebrow"><span>02</span> CHECKING</div>
+            <h1>Checking <span>your product.</span></h1>
+            <p className="intro">Check Am reads the pack, looks it up in NAFDAC, SON and NCC data, and researches online only when it has to.</p>
           </div>
-          <div className={`run-state run-${runStatus}`}><span />{statusLabel}</div>
+          <div className={`run-state run-${runStatus}`}><span />{statusText}</div>
         </div>
 
-        <div className="demo-notice" role="note">
-          <span className="demo-notice-icon">i</span>
-          <p><strong>{source === 'live' ? 'Live event feed connected' : 'Illustrative demo trace'}</strong>{source === 'live'
-            ? ' — incoming events are shown as received. This interface does not verify agent claims.'
-            : ' — no autonomous research agent is connected, and no external research is being performed.'}</p>
-        </div>
+        {runStatus === 'running' && <BrandLoader label="Checking your product…" sublabel={`${PIPELINE[activeIndex]?.label || 'Working'} · ${elapsed}s`} />}
 
         <section className="intake-summary-card" aria-label="Current intake summary">
-          <div className="summary-label"><span className="summary-icon">▤</span><div><small>ACTIVE INTAKE</small><strong>{intake.situation.summary || 'Situation summary not provided'}</strong></div></div>
-          <div className="summary-meta"><span className={`urgency-tag intent-tag intent-${purchaseStage.toLowerCase()}`}>{purchaseStageLabel}</span><span className={`urgency-tag urgency-${intake.situation.urgency}`}>{urgency}</span><span>{intake.attachments.length} attachment{intake.attachments.length === 1 ? '' : 's'}</span>{intake.situation.location && <span>{intake.situation.location}</span>}</div>
+          <div className="summary-label"><span className="summary-icon">▤</span><div><small>PRODUCT</small><strong>{intake.situation.summary || [intake.product?.brand, intake.product?.productName].filter(Boolean).join(' ') || 'Product check'}</strong></div></div>
+          <div className="summary-meta"><span className={`urgency-tag intent-tag intent-${purchaseStage.toLowerCase()}`}>{purchaseStageLabel}</span><span>{files.length} photo{files.length === 1 ? '' : 's'}</span>{intake.situation.location && <span>{intake.situation.location}</span>}</div>
         </section>
         {intake.product && Object.values(intake.product).some((value) => typeof value === 'string' && value.trim()) && <section className="intake-summary-card manual-product-summary" aria-label="Manually entered product details">
-          <div className="summary-label"><span className="summary-icon">≡</span><div><small>USER-ENTERED PRODUCT DETAILS</small><strong>{intake.product.productName || intake.product.brand || intake.product.category || 'Product details provided'}</strong></div></div>
-          <div className="summary-meta">{[intake.product.brand, intake.product.variant, intake.product.barcode && `Barcode ${intake.product.barcode}`, intake.product.nafdacNumber && `NAFDAC ${intake.product.nafdacNumber}`, intake.product.sonNumber && `SON ${intake.product.sonNumber}`, intake.product.batchNumber && `Batch ${intake.product.batchNumber}`].filter(Boolean).map((value) => <span key={value}>{value}</span>)}</div>
+          <div className="summary-label"><span className="summary-icon">≡</span><div><small>DETAILS YOU TYPED</small><strong>{intake.product.productName || intake.product.brand || intake.product.category || 'Product details provided'}</strong></div></div>
+          <div className="summary-meta">{[intake.product.brand, intake.product.variant, intake.product.barcode && `Barcode ${intake.product.barcode}`, intake.product.nafdacNumber && `NAFDAC ${intake.product.nafdacNumber}`, intake.product.sonNumber && `SON ${intake.product.sonNumber}`, intake.product.batchNumber && `Batch ${intake.product.batchNumber}`, intake.product.imei && `IMEI ${intake.product.imei}`].filter(Boolean).map((value) => <span key={value}>{value}</span>)}</div>
         </section>}
         {intake.preset && <section className="demo-preset-result" aria-label="Demo preset details">
-          <div><span>SIMULATED SCENARIO · {intake.preset.label.toUpperCase()}</span><strong>{intake.preset.outcome}</strong></div>
+          <div><span>JUDGE PRESET · {intake.preset.label.toUpperCase()}</span><strong>{intake.preset.outcome}</strong></div>
           <p>{intake.preset.simulation}</p>
         </section>}
 
         <div className="telemetry-layout">
           <div className="telemetry-main">
-            <AgentThoughtLog events={events} live={source === 'live'} />
-            <VerificationPanel checks={checks} live={source === 'live'} />
-            <section className={`telemetry-card stage-guidance stage-guidance-${purchaseStage.toLowerCase()}`} aria-label="Situation-specific guidance">
-              <p className="telemetry-kicker">{purchaseStage === 'ALREADY_BOUGHT' ? 'POST-PURCHASE SAFETY' : 'PRE-PURCHASE GUIDANCE'}</p>
-              <strong>{purchaseStage === 'ALREADY_BOUGHT' ? 'Already bought' : 'Before buying'}</strong>
-              <p>{recommendation}</p>
-              <small>This is precautionary guidance, not a product-authenticity verdict or medical advice.</small>
-            </section>
+            <AgentThoughtLog events={events} live />
+            <VerificationPanel checks={checks} live />
           </div>
           <aside className="telemetry-side">
-            <SimulatedTelemetry elapsed={elapsed} running={running} live={source === 'live'} />
-            <StepProgressTracker steps={displayedSteps} activeIndex={displayedStepIndex} status={runStatus} />
+            <StepProgressTracker steps={PIPELINE} activeIndex={activeIndex} status={runStatus} />
             <section className="telemetry-card run-controls-card">
               <p className="telemetry-kicker">RUN CONTROLS</p>
               <div className="run-control-buttons">
-                {source === 'demo' && runStatus !== 'completed' && <button type="button" onClick={() => setRunStatus(running ? 'paused' : 'running')}>{running ? 'Ⅱ Pause demo' : '▶ Resume demo'}</button>}
-                {source === 'demo' && <button type="button" className="control-secondary" onClick={restartDemo}>↻ Restart demo</button>}
+                {runStatus === 'failed' && <button type="button" onClick={() => setAttempt((n) => n + 1)}>↻ Try again</button>}
+                <button type="button" className="control-secondary" onClick={onBack}>← Back</button>
               </div>
-              <p className="control-hint">{source === 'live' ? 'Run state is supplied by the event feed.' : 'The demo advances through a sample trace locally.'}</p>
-            </section>
-            <section className="telemetry-card intake-facts">
-              <p className="telemetry-kicker">INTAKE SNAPSHOT</p>
-              <dl>
-                <div><dt>Time sensitivity</dt><dd>{urgency}</dd></div>
-                <div><dt>Approach safety</dt><dd>{intake.situation.safeToApproach || 'Not specified'}</dd></div>
-                <div><dt>People involved</dt><dd>{intake.situation.peopleInvolved || 'Not specified'}</dd></div>
-                <div><dt>Additional context</dt><dd>{intake.situation.additionalDetails ? 'Provided' : 'Not provided'}</dd></div>
-              </dl>
+              <p className="control-hint">A first check of a new product can take 15–20 seconds while Check Am researches it. Repeat checks are instant.</p>
             </section>
           </aside>
         </div>
 
-        <details className="event-contract">
-          <summary>Integrate an agent event feed</summary>
-          <p>Dispatch a <code>checkam:agent-event</code> CustomEvent on <code>window</code>. Supported detail payloads:</p>
-          <pre>{`{ type: 'trace', title: 'Searching source', detail: 'Query sent to source index' }
-{ type: 'verification', id: 'source-check', name: 'Source coverage', detail: '3 sources checked', status: 'passed' }
-{ type: 'status', status: 'running' }`}</pre>
-          <p>Trace status may be <code>completed</code> or <code>failed</code>. Verification status accepts <code>passed</code>, <code>warning</code>, <code>failed</code>, or <code>running</code>. Invalid events are ignored.</p>
-        </details>
-        <footer className="page-footer"><span>CheckAm EXECUTION MONITOR</span><span>Heuristics are review signals, not a guarantee of accuracy.</span></footer>
+        <footer className="page-footer"><span>Check Am</span><span>Evidence, not a guarantee. When in doubt, don’t buy or use it.</span></footer>
       </div>
     </main>
   )

@@ -126,14 +126,14 @@ function VideoRecorder({ isActive, stream, onCaptureFrame, onError, onRecordingC
         <small>Minimum 5 seconds · maximum 15 seconds</small>
       </div>}
       <div className="camera-actions">
-        <button type="button" className="button button-light" onClick={onCaptureFrame} disabled={recording}>
-          <span aria-hidden="true">◎</span> Capture frame
+        <button type="button" className="button button-record" onClick={onCaptureFrame} disabled={recording}>
+          <span aria-hidden="true">◎</span> Take photo
         </button>
         {recording
           ? <button type="button" className="button button-recording" disabled={elapsed < MIN_DURATION_MS} onClick={stopRecording}>
             <span />{elapsed < MIN_DURATION_MS ? `Wait ${Math.ceil((MIN_DURATION_MS - elapsed) / 1000)}s` : 'Stop recording'}
           </button>
-          : <button type="button" className="button button-record" onClick={startRecording}>
+          : <button type="button" className="button button-light" onClick={startRecording}>
             <span /> Record 5–15 sec
           </button>}
       </div>

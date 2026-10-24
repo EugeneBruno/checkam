@@ -6,10 +6,25 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=photo_camera" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f5f7f3" />
-    <meta name="description" content="Capture media and context for a clear CheckAm field intake." />
-    <title>CheckAm</title>
+    <meta name="description" content="Check Am: check a product before you buy it. Photos checked against NAFDAC, SON and NCC data." />
+    <title>Check Am</title>
+    <style>
+      #splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #f7f7f0; transition: opacity .35s ease, visibility .35s; font-family: system-ui, sans-serif; }
+      #splash.hide { opacity: 0; visibility: hidden; }
+      #splash .mark { position: relative; display: grid; place-items: center; width: 168px; height: 168px; }
+      #splash .ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid #e1ebe2; border-top-color: #18543f; animation: sp 1s linear infinite; }
+      #splash img { width: 128px; animation: br 1.6s ease-in-out infinite; }
+      #splash p { margin: 0; color: #18543f; font-weight: 600; font-size: 15px; }
+      @keyframes sp { to { transform: rotate(360deg); } }
+      @keyframes br { 0%,100% { transform: scale(1); } 50% { transform: scale(.94); opacity: .75; } }
+      @media (prefers-reduced-motion: reduce) { #splash .ring, #splash img { animation: none; } }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-label="Loading Check Am">
+      <div class="mark"><span class="ring"></span><img src="./src/public/logo-trim.png" alt="Check Am" /></div>
+      <p>Check before you buy</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
