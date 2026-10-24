@@ -15,6 +15,19 @@ APPLIES_TO = {
     "veterinary", "vaccines and biologics",
 }
 
+# Categories we currently treat as covered by the imported snapshot.
+# Expand this only after confirming coverage in the source dataset.
+SNAPSHOT_COVERED_CATEGORIES = {
+    "drug",
+    "drugs",
+    "medicine",
+    "veterinary",
+    "vaccines and biologics",
+    "herbal",
+    "herbals and nutraceuticals",
+}
+
+
 CRITICAL = True
 
 NAPAMS_URL = "https://registration.nafdac.gov.ng/Home/VerifyProduct"
@@ -91,11 +104,100 @@ def run(product: dict, ctx: Any = None) -> dict:
     )
     number = _reg_key(printed_number)
 
+    
     if not number:
+        # Search the local registry by name when OCR misses the number.
+        # A name match is a candidate, not proof of authenticity.
+        if not isinstance(ctx, dict) or ctx.get("conn") is None:
+            return _evidence(
+                "unknown",
+                "No NAFDAC number was read and the local registry is unavailable.",
+            )
+
+        brand = str(product.get("brand") or "").strip()
+        name = str(
+            product.get("name") or product.get("product_name") or ""
+        ).strip()
+
+        if not (brand or name):
+            return _evidence(
+                "unknown",
+                "No NAFDAC number or usable product name was detected.",
+            )
+
+        try:
+            candidates = ctx["conn"].execute(
+                """
+                SELECT reg_no, product_name, category, status,
+                       applicant, manufacturer
+                FROM registry_products
+                WHERE country = ?
+                  AND source = 'nafdac_greenbook'
+                  AND product_name IS NOT NULL
+                  AND LOWER(product_name) LIKE ?
+                LIMIT 50
+                """,
+                (ctx.get("country", "NG"), f"%{name.casefold()}%"),
+            ).fetchall() if name else []
+        except Exception:
+            candidates = []
+
+        claimed_brand = _normalise_text(brand)
+        matches = []
+
+        for row in candidates:
+            registered_name = _normalise_text(row["product_name"])
+            if not registered_name:
+                continue
+
+            # Require the product name to match, and check the brand
+            # separately when one was detected.
+            name_match = _contains_match(
+                _normalise_text(name), registered_name
+            )
+            brand_match = (
+                not claimed_brand or claimed_brand in registered_name
+            )
+
+            if name_match and brand_match:
+                matches.append(row)
+
+        if len(matches) == 1:
+            match = matches[0]
+            ctx["registry_candidate"] = {
+                "product_name": match["product_name"],
+                "registration_number": match["reg_no"],
+                "manufacturer": match["manufacturer"] or match["applicant"],
+                "status": match["status"],
+                "source": "NAFDAC Greenbook local snapshot",
+                "match_status": "candidate_only",
+            }
+            return _evidence(
+                "unknown",
+                (
+                    f"Possible local registry match: "
+                    f"'{match['product_name']}' "
+                    f"(registration {match['reg_no']}). "
+                    "The registration number was not read from the "
+                    "package, so this match is not confirmed."
+                ),
+                weight=0,
+            )
+
+        if matches:
+            return _evidence(
+                "unknown",
+                f"Found {len(matches)} possible local product matches. "
+                "A readable registration number or clearer product photo is needed.",
+                weight=0,
+            )
+
         return _evidence(
             "unknown",
-            "No NAFDAC registration number was supplied or read from the product.",
+            "No NAFDAC number was read and no sufficiently clear local name match was found.",
+            weight=0,
         )
+
 
     if not isinstance(ctx, dict) or ctx.get("conn") is None:
         return _evidence(
