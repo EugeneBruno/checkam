@@ -3,6 +3,12 @@
 Run:  uvicorn main:app --reload --host 0.0.0.0 --port 8000   (from backend/)
 Docs: http://localhost:8000/docs
 """
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+
 import json
 from typing import List, Optional
 
@@ -28,7 +34,7 @@ def health():
 
 @app.post("/verify")
 async def verify(
-    files: Optional[List[UploadFile]] = File(None),
+    files: Optional[List[UploadFile]] = File(None, description="Upload product photos for AI identification", media_type="image/*",),
     fields: Optional[str] = Form(None),          # JSON: {"brand": "...", "nafdac_no": "...", "batch": "...", ...}
     situation: str = Form("before_buying"),      # before_buying | already_bought
     state: Optional[str] = Form(None),
@@ -119,3 +125,37 @@ def get_scan(scan_id: str):
     if not row:
         raise HTTPException(404, "Scan not found")
     return json.loads(row["result_json"])
+
+
+def custom_openapi():
+    from fastapi.openapi.utils import get_openapi
+
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+    )
+
+    body_schema = schema["components"]["schemas"].get(
+        "Body_verify_verify_post"
+    )
+
+    if body_schema:
+        body_schema.setdefault("properties", {})["files"] = {
+            "title": "Files",
+            "description": "Upload product photos for AI identification",
+            "type": "array",
+            "items": {
+                "type": "string",
+                "format": "binary",
+            },
+        }
+
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi

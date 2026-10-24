@@ -1,4 +1,4 @@
-
+﻿
 """Load Greenbook, known-fake, SON and demo data into SQLite.
 
 Run from the repository root:
@@ -218,7 +218,7 @@ def load_greenbook(
                 }
 
                 if existing is not None and existing["content_hash"] == content_hash:
-                    # Identical source record: no duplicate insert required.
+                    counts["skipped"] += 1
                     continue
 
                 connection.execute(
@@ -269,6 +269,9 @@ def load_greenbook(
                     )
 
                 counts["imported"] += 1
+            except Exception as exc:
+                counts["errors"] += 1
+                print(f"Error processing record: {exc}")
 
         connection.execute(
             """
